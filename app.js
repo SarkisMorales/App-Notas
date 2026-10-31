@@ -133,14 +133,16 @@ const el = {
   micArea: $('mic-area'),
   micToggle: $('mic-toggle'),
   micStatus: $('mic-status'),
-  // Confirmación
-  confirm: $('confirm'),
-  confirmTitle: $('confirm-title'),
-  confirmReason: $('confirm-reason'),
-  confirmText: $('confirm-text'),
-  confirmChips: $('confirm-chips'),
-  confirmSave: $('confirm-save'),
-  confirmEdit: $('confirm-edit'),
+  captureHintMain: $('capture-hint-main'),
+  // Revisar lo dictado
+  review: $('review'),
+  reviewScroll: $('review-scroll'),
+  reviewList: $('review-list'),
+  reviewTitle: $('review-title'),
+  reviewBack: $('review-back'),
+  reviewSave: $('review-save'),
+  reviewSaveTop: $('review-save-top'),
+  reviewMerge: $('review-merge'),
   // Selector y administración de categorías
   picker: $('picker'),
   pickerList: $('picker-list'),
@@ -279,56 +281,6 @@ function liveNotes() {
 
 function countIn(catId) {
   return liveNotes().filter((n) => (catId === 'none' ? !catById(n.categoryId) : n.categoryId === catId)).length;
-}
-
-/**
- * Sugiere una categoría según el texto de la nota.
- * Busca el nombre de cada categoría (vale más) y sus palabras clave,
- * sin importar mayúsculas, acentos ni plurales simples.
- */
-// "en el buffet", "para el negocio", "del proyecto"… indican a dónde va la nota.
-const CUE_BEFORE = /(?:^| )(?:en|para|de|del|al|a|categoria)(?: (?:el|la|los|las|mi|mis))? $/;
-
-function termVariants(t) {
-  const v = new Set([t, `${t}s`, `${t}es`]);
-  if (t.length > 3) { v.add(t.replace(/es$/, '')); v.add(t.replace(/s$/, '')); }
-  return v;
-}
-
-function suggestCategory(text) {
-  const hay = ` ${words(text)} `;
-  let best = null;
-
-  for (const cat of categories) {
-    const nameTerm = words(cat.name);
-    const nameVariants = termVariants(nameTerm);
-    const terms = [{ t: nameTerm, w: 3, label: cat.name.toLowerCase() }]
-      .concat((cat.keywords || [])
-        .map((k) => ({ t: words(k), w: 2, label: k }))
-        .filter((k) => !nameVariants.has(k.t))); // no contar dos veces el nombre
-    let score = 0;
-    let firstAt = Infinity;
-    let matched = null;
-
-    for (const { t, w, label } of terms) {
-      if (t.length < 2) continue;
-      for (const v of termVariants(t)) {
-        const at = hay.indexOf(` ${v} `);
-        if (at !== -1) {
-          score += w;
-          if (CUE_BEFORE.test(hay.slice(0, at) + ' ')) score += 2;
-          if (at < firstAt) { firstAt = at; matched = label; }
-          break;
-        }
-      }
-    }
-    if (nameTerm && hay.includes(` categoria ${nameTerm} `)) score += 5;
-
-    if (score > 0 && (!best || score > best.score || (score === best.score && firstAt < best.firstAt))) {
-      best = { category: cat, score, firstAt, matched };
-    }
-  }
-  return best;
 }
 
 function renderChips() {
@@ -843,9 +795,8 @@ function canUseWebSpeech() {
   return !!SpeechRec && !speechBlocked && !(isIOS() && isStandalone());
 }
 
-const HINT_KEYBOARD = el.captureHint.innerHTML;
-const HINT_MIC = 'Si el micrófono no responde, tocá el cuadro de texto y usá el <strong>🎤 del teclado</strong>. ' +
-  'Si mencionás una categoría —por ejemplo <em>“en el negocio…”</em>— la reconozco y te pregunto antes de guardar.';
+const HINT_KEYBOARD = el.captureHintMain.innerHTML;
+const HINT_MIC = 'Si el micrófono no responde, tocá el cuadro de texto y usá el <strong>🎤 del teclado</strong>.';
 
 function openCapture() {
   if (openRow) closeSwipe(openRow);
@@ -857,7 +808,7 @@ function openCapture() {
 
   if (canUseWebSpeech()) {
     el.micArea.hidden = false;
-    el.captureHint.innerHTML = HINT_MIC;
+    el.captureHintMain.innerHTML = HINT_MIC;
     startListening();
   } else {
     useKeyboardDictation();
@@ -868,7 +819,7 @@ function openCapture() {
 
 function useKeyboardDictation() {
   el.micArea.hidden = true;
-  el.captureHint.innerHTML = HINT_KEYBOARD;
+  el.captureHintMain.innerHTML = HINT_KEYBOARD;
 }
 
 function updateMicUI() {
@@ -923,7 +874,7 @@ function closeCapture() {
   rec = null;
   el.captureText.blur();
   el.capture.hidden = true;
-  el.confirm.hidden = true;
+  closeReview();
   document.body.classList.remove('capturing');
 }
 
@@ -944,92 +895,411 @@ el.captureDone.addEventListener('click', () => {
     const text = el.captureText.value.trim();
     if (!text) { showToast('Todavía no dijiste nada'); return; }
     el.captureText.blur();
-    openConfirm(text);
-  }, SpeechRec && !speechBlocked ? 250 : 0);
+    openReview(text);
+  }, canUseWebSpeech() ? 250 : 0);
 });
 
-/* ---------- Confirmación: ¿en qué categoría la guardo? ---------- */
-let confirmState = null;
+/* =========================================================
+   Revisar lo dictado: categoría, importante y varias notas
+   (la interpretación la hace interprete.js)
+   ========================================================= */
+let review = null; // { raw, cards: [...] }
+let reanalyzeTimer = null;
 
-function openConfirm(text) {
-  const s = suggestCategory(text);
-  confirmState = {
-    text,
-    selected: s ? s.category.id : (catById(filter) ? filter : null),
-    suggestion: s,
-  };
-  el.confirmText.textContent = text;
-  renderConfirm();
-  el.confirm.hidden = false;
+const CONFIDENCE_LABEL = { alta: 'muy seguro', media: 'bastante seguro', baja: 'no muy seguro' };
+
+function autoSelection(seg) {
+  if (seg.command && seg.command.categoryId && catById(seg.command.categoryId)) return seg.command.categoryId;
+  if (seg.offer && seg.offer.explicit) return 'new:' + seg.offer.name;
+  if (seg.suggestions.length) return seg.suggestions[0].categoryId;
+  if (catById(filter)) return filter;
+  return '';
 }
 
-function renderConfirm() {
-  const { selected, suggestion } = confirmState;
-  const cat = catById(selected);
+function makeCard(seg) {
+  return {
+    text: seg.text,
+    pinned: seg.pinned,
+    pinHeard: seg.pinHeard,
+    suggestions: seg.suggestions,
+    offer: seg.offer,
+    command: seg.command,
+    selected: autoSelection(seg),
+    manual: false,
+    showAll: !seg.suggestions.length && !seg.offer,
+    initialTop: seg.suggestions.length ? seg.suggestions[0].categoryId : null,
+  };
+}
 
-  if (cat) el.confirmTitle.textContent = `¿Guardar esta nota en “${cat.name}”?`;
-  else if (!categories.length) el.confirmTitle.textContent = '¿Guardar esta nota?';
-  else el.confirmTitle.textContent = '¿Guardar esta nota sin categoría?';
+function openReview(raw) {
+  const segs = Interprete.interpret(raw, categories, liveNotes());
+  if (!segs.length) { showToast('Todavía no dijiste nada'); return; }
+  review = { raw, cards: segs.map(makeCard) };
+  el.review.hidden = false;
+  renderReview();
+  el.reviewScroll.scrollTop = 0;
+}
 
-  if (suggestion && suggestion.category.id === selected) {
-    el.confirmReason.textContent = `La reconocí porque dijiste “${suggestion.matched}”.`;
-  } else if (!suggestion && cat && selected === filter) {
-    el.confirmReason.textContent = `No reconocí ninguna categoría; te la propongo en “${cat.name}” porque es la que estabas mirando.`;
-  } else if (!suggestion && categories.length) {
-    el.confirmReason.textContent = 'No reconocí ninguna categoría. Elegí una abajo si querés.';
-  } else {
-    el.confirmReason.textContent = '';
+function closeReview() {
+  clearTimeout(reanalyzeTimer);
+  el.review.hidden = true;
+  review = null;
+}
+
+function selectionName(sel) {
+  if (!sel) return null;
+  if (sel.startsWith('new:')) return sel.slice(4);
+  const c = catById(sel);
+  return c ? c.name : null;
+}
+
+function questionText(card) {
+  const name = selectionName(card.selected);
+  if (card.selected.startsWith('new:')) return `¿Crear “${name}” y guardar ahí?`;
+  if (name) return `¿Guardar en “${name}”?`;
+  return categories.length ? '¿Guardar sin categoría?' : '¿Guardar esta nota?';
+}
+
+function reasonText(r, catName) {
+  switch (r.type) {
+    case 'command': return `lo pediste: “${r.heard}”`;
+    case 'name': return `dijiste “${r.heard}”`;
+    case 'keyword': return `dijiste “${r.heard}” (palabra clave de ${catName})`;
+    case 'fuzzy': return `dijiste “${r.word}”, que suena como “${r.label}”`;
+    case 'learned': return `aprendí de tus notas en ${catName}: ${r.words.map((w) => `“${w}”`).join(', ')}`;
+    default: return '';
   }
+}
+
+function whyText(card) {
+  const sel = card.selected;
+  if (sel.startsWith('new:')) {
+    return card.offer && card.offer.explicit && card.offer.name === sel.slice(4)
+      ? `Lo pediste: “${card.offer.heard}”. La categoría se crea al guardar.`
+      : 'La categoría se crea al guardar.';
+  }
+  const cat = catById(sel);
+  const learnNote = card.manual && cat && sel !== card.initialTop ? ' La elegiste vos: voy a aprender de esta nota para la próxima.' : '';
+  const sug = card.suggestions.find((s) => s.categoryId === sel);
+  if (sug && cat) {
+    // Lo más claro primero: el comando, después lo que dijiste; lo aprendido solo si no hay otra pista.
+    const cmd = sug.reasons.find((r) => r.type === 'command');
+    const explicit = sug.reasons.filter((r) => r.type !== 'learned' && r.type !== 'command');
+    const reasons = cmd ? [cmd] : explicit.length ? explicit.slice(0, 2) : sug.reasons.slice(0, 1);
+    return capitalize(reasons.map((r) => reasonText(r, cat.name)).filter(Boolean).join(' · ')) + '.' + learnNote;
+  }
+  if (learnNote) return learnNote.trim();
+  if (cat && sel === filter && !card.manual) {
+    return `No reconocí ninguna categoría; te la propongo en “${cat.name}” porque es la que estabas mirando.`;
+  }
+  if (!sel && !card.suggestions.length && categories.length) {
+    return card.offer ? 'No tenés esa categoría todavía: tocá ✨ para crearla.' : 'No reconocí ninguna categoría. Elegí una si querés.';
+  }
+  return '';
+}
+
+function growTextarea(ta) {
+  ta.style.height = 'auto';
+  ta.style.height = ta.scrollHeight + 'px';
+}
+
+function renderReview() {
+  const cards = review.cards;
+  const frag = document.createDocumentFragment();
+  cards.forEach((card, i) => {
+    const art = document.createElement('article');
+    art.className = 'rv-card';
+    art.dataset.i = i;
+
+    const head = document.createElement('div');
+    head.className = 'rv-head';
+    const num = document.createElement('span');
+    num.className = 'rv-num';
+    num.textContent = cards.length > 1 ? `Nota ${i + 1} de ${cards.length}` : 'Tu nota';
+    head.append(num);
+    if (cards.length > 1) {
+      const rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'text-btn danger';
+      rm.dataset.act = 'remove';
+      rm.textContent = 'Quitar';
+      head.append(rm);
+    }
+
+    const q = document.createElement('h3');
+    q.className = 'rv-q';
+
+    const ta = document.createElement('textarea');
+    ta.className = 'rv-text';
+    ta.rows = 1;
+    ta.value = card.text;
+    ta.setAttribute('autocapitalize', 'sentences');
+    ta.setAttribute('aria-label', 'Texto de la nota (podés corregirlo)');
+
+    const meta = document.createElement('div');
+    meta.className = 'rv-meta';
+
+    const toggle = document.createElement('label');
+    toggle.className = 'rv-toggle';
+    const tl = document.createElement('span');
+    const small = document.createElement('small');
+    small.textContent = card.pinHeard ? ` (dijiste “${card.pinHeard}”)` : ' (queda fijada arriba)';
+    tl.append('⭐ Importante', small);
+    const sw = document.createElement('input');
+    sw.type = 'checkbox';
+    sw.className = 'switch';
+    sw.dataset.act = 'pin';
+    sw.checked = !!card.pinned;
+    toggle.append(tl, sw);
+
+    art.append(head, q, ta, meta, toggle);
+    frag.append(art);
+  });
+  el.reviewList.replaceChildren(frag);
+  cards.forEach((_, i) => renderCardMeta(i));
+  el.reviewList.querySelectorAll('.rv-text').forEach(growTextarea);
+  updateReviewFooter();
+}
+
+function renderCardMeta(i) {
+  const card = review.cards[i];
+  const art = el.reviewList.querySelector(`.rv-card[data-i="${i}"]`);
+  if (!art) return;
+  art.querySelector('.rv-q').textContent = questionText(card);
 
   const frag = document.createDocumentFragment();
-  const chip = (id, label, color) => {
+  if (!card.text.trim()) {
+    const w = document.createElement('p');
+    w.className = 'rv-warn';
+    w.textContent = 'Esta nota quedó vacía: escribí algo o quitala.';
+    frag.append(w);
+  }
+
+  const chip = (sel, label, color, small, extra) => {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'chip' + ((selected || '') === id ? ' active' : '');
-    b.dataset.cat = id;
+    b.className = 'chip' + (extra ? ' ' + extra : '') + (card.selected === sel ? ' active' : '');
+    b.dataset.act = 'pick';
+    b.dataset.sel = sel;
     if (color) b.append(dot(color));
     b.append(label);
-    frag.append(b);
+    if (small) {
+      const s = document.createElement('small');
+      s.textContent = small;
+      b.append(s);
+    }
+    return b;
   };
-  for (const c of sortedCategories()) chip(c.id, c.name, c.color);
-  chip('', 'Sin categoría', null);
-  const add = document.createElement('button');
-  add.type = 'button';
-  add.className = 'chip add';
-  add.dataset.cat = '__add';
-  add.textContent = '+ Nueva';
-  frag.append(add);
-  el.confirmChips.replaceChildren(frag);
 
-  el.confirmSave.textContent = cat ? `Sí, guardar en “${cat.name}”` : 'Guardar sin categoría';
+  const chips = document.createElement('div');
+  chips.className = 'chips wrap';
+  const shown = new Set();
+  for (const s of card.suggestions) {
+    const c = catById(s.categoryId);
+    if (!c) continue;
+    chips.append(chip(c.id, c.name, c.color, CONFIDENCE_LABEL[s.confidence]));
+    shown.add(c.id);
+  }
+  if (card.offer && !categories.some((c) => words(c.name) === words(card.offer.name))) {
+    chips.append(chip('new:' + card.offer.name, `✨ Crear “${card.offer.name}”`, null, null, 'new'));
+  }
+  if (card.showAll) {
+    for (const c of sortedCategories()) if (!shown.has(c.id)) chips.append(chip(c.id, c.name, c.color));
+    chips.append(chip('', 'Sin categoría', null));
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'chip add';
+    add.dataset.act = 'newcat';
+    add.textContent = '+ Nueva…';
+    chips.append(add);
+  } else {
+    const selCat = catById(card.selected);
+    if (selCat && !shown.has(selCat.id)) chips.append(chip(selCat.id, selCat.name, selCat.color));
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'chip more';
+    more.dataset.act = 'more';
+    more.textContent = 'Otra categoría…';
+    chips.append(more);
+  }
+
+  const label = document.createElement('p');
+  label.className = 'rv-label';
+  label.textContent = card.suggestions.length ? 'Sugerencias' : 'Categoría';
+  frag.append(label, chips);
+
+  const why = whyText(card);
+  if (why) {
+    const p = document.createElement('p');
+    p.className = 'rv-why';
+    p.textContent = why;
+    frag.append(p);
+  }
+  art.querySelector('.rv-meta').replaceChildren(frag);
 }
 
-el.confirmChips.addEventListener('click', (e) => {
-  const b = e.target.closest('.chip');
-  if (!b || !confirmState) return;
-  if (b.dataset.cat === '__add') {
-    openCatEditor(null, (cat) => { confirmState.selected = cat.id; renderConfirm(); });
-    return;
+function updateReviewFooter() {
+  const cards = review.cards;
+  const n = cards.length;
+  el.reviewTitle.textContent = n > 1 ? `Revisar ${n} notas` : 'Revisar nota';
+  if (n > 1) {
+    el.reviewSave.textContent = `Sí, guardar las ${n} notas`;
+  } else {
+    const c = cards[0];
+    const name = selectionName(c.selected);
+    el.reviewSave.textContent = c.selected.startsWith('new:')
+      ? `Sí, crear “${name}” y guardar`
+      : name ? `Sí, guardar en “${name}”` : 'Guardar sin categoría';
   }
-  confirmState.selected = b.dataset.cat || null;
-  renderConfirm();
+  el.reviewMerge.hidden = n < 2;
+}
+
+function cardIndexOf(node) {
+  const art = node.closest('.rv-card');
+  return art ? Number(art.dataset.i) : -1;
+}
+
+el.reviewList.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-act]');
+  if (!b || !review) return;
+  const i = cardIndexOf(b);
+  const card = review.cards[i];
+  if (!card) return;
+  const act = b.dataset.act;
+  if (act === 'pick') {
+    card.selected = b.dataset.sel;
+    card.manual = true;
+    renderCardMeta(i);
+    updateReviewFooter();
+  } else if (act === 'more') {
+    card.showAll = true;
+    renderCardMeta(i);
+  } else if (act === 'newcat') {
+    openCatEditor(null, (cat) => {
+      if (!review || review.cards[i] !== card) return;
+      card.selected = cat.id;
+      card.manual = true;
+      card.showAll = true;
+      review.cards.forEach((_, k) => renderCardMeta(k));
+      updateReviewFooter();
+    });
+  } else if (act === 'remove') {
+    review.cards.splice(i, 1);
+    if (!review.cards.length) { closeReview(); return; }
+    renderReview();
+  }
 });
 
-el.confirmEdit.addEventListener('click', () => {
-  el.confirm.hidden = true;
+el.reviewList.addEventListener('change', (e) => {
+  if (!review || e.target.dataset.act !== 'pin') return;
+  const card = review.cards[cardIndexOf(e.target)];
+  if (card) card.pinned = e.target.checked;
+});
+
+// Corregir el texto: vuelve a sugerir la categoría (si no la elegiste vos).
+el.reviewList.addEventListener('input', (e) => {
+  const ta = e.target;
+  if (!review || !ta.classList.contains('rv-text')) return;
+  const i = cardIndexOf(ta);
+  const card = review.cards[i];
+  if (!card) return;
+  card.text = ta.value;
+  growTextarea(ta);
+  clearTimeout(reanalyzeTimer);
+  reanalyzeTimer = setTimeout(() => {
+    if (!review || review.cards[i] !== card || card.command) return;
+    const seg = Interprete.analyzeOne(card.text, categories, liveNotes());
+    card.suggestions = seg.suggestions;
+    card.offer = seg.offer;
+    if (!card.manual) card.selected = autoSelection(seg);
+    renderCardMeta(i);
+    updateReviewFooter();
+  }, 400);
+});
+
+el.reviewBack.addEventListener('click', () => {
+  closeReview();
   el.captureText.focus();
+  const end = el.captureText.value.length;
+  el.captureText.setSelectionRange(end, end);
 });
 
-el.confirmSave.addEventListener('click', async () => {
-  if (!confirmState) return;
-  const note = newNote(confirmState.text, confirmState.selected);
-  confirmState = null;
-  closeCapture();
-  await persist(note);
-  render();
-  const cat = catById(note.categoryId);
-  showToast(cat ? `Guardada en “${cat.name}”` : 'Nota guardada', 'Ver', () => openEditor(note, false));
+el.reviewMerge.addEventListener('click', () => {
+  if (!review || review.cards.length < 2) return;
+  const cards = review.cards;
+  const text = cards.map((c) => c.text.trim()).filter(Boolean).join('\n');
+  const merged = makeCard(Interprete.analyzeOne(text, categories, liveNotes()));
+  merged.text = text;
+  const first = cards.find((c) => c.selected);
+  if (first) {
+    merged.selected = first.selected;
+    merged.command = first.command;
+    merged.offer = first.offer || merged.offer;
+  }
+  const pinnedCard = cards.find((c) => c.pinned);
+  merged.pinned = !!pinnedCard;
+  merged.pinHeard = pinnedCard ? pinnedCard.pinHeard : '';
+  review.cards = [merged];
+  renderReview();
 });
+
+async function saveReview() {
+  if (!review) return;
+  const cards = review.cards.filter((c) => c.text.trim());
+  if (!cards.length) { showToast('La nota está vacía: escribí algo antes de guardar'); return; }
+
+  // Categorías nuevas que pediste crear
+  const newCats = [];
+  for (const c of cards) {
+    if (c.selected.startsWith('new:')) {
+      const name = c.selected.slice(4).trim();
+      let cat = categories.find((x) => words(x.name) === words(name));
+      if (!cat) {
+        cat = { id: uid(), name, color: nextColor(), keywords: [], created: Date.now() + newCats.length };
+        categories.push(cat);
+        newCats.push(cat);
+      }
+      c.categoryId = cat.id;
+    } else {
+      c.categoryId = catById(c.selected) ? c.selected : null;
+    }
+  }
+  const learned = cards.length === 1 && cards[0].manual && cards[0].categoryId && cards[0].categoryId !== cards[0].initialTop;
+
+  const now = Date.now();
+  const saved = cards.map((c, k) => {
+    const n = newNote(c.text.trim(), c.categoryId);
+    n.pinned = !!c.pinned;
+    n.created = n.updated = now - k;
+    return n;
+  });
+
+  closeCapture();
+  try {
+    if (newCats.length) await catStore.putMany(newCats);
+  } catch (err) {
+    console.error(err);
+  }
+  for (const n of saved) await persist(n);
+  render();
+
+  if (saved.length === 1) {
+    const n = saved[0];
+    const cat = catById(n.categoryId);
+    let msg = cat ? `Guardada en “${cat.name}”` : 'Nota guardada';
+    if (learned) msg += ' · aprendí de esta nota';
+    showToast(msg, 'Ver', () => openEditor(n, false));
+  } else {
+    showToast(`Guardé ${saved.length} notas`, 'Deshacer', async () => {
+      for (const n of saved) await removeNote(n);
+      render();
+      showToast('Listo, no se guardaron');
+    });
+  }
+}
+
+el.reviewSave.addEventListener('click', saveReview);
+el.reviewSaveTop.addEventListener('click', saveReview);
 
 /* =========================================================
    Crear / editar / eliminar categorías
@@ -1048,9 +1318,13 @@ function renderColorPicker(selected) {
   }));
 }
 
-function openCatEditor(cat, onSaved) {
+function nextColor() {
   const used = new Set(categories.map((c) => c.color));
-  const color = cat ? cat.color : COLORS.find((c) => !used.has(c)) || COLORS[0];
+  return COLORS.find((c) => !used.has(c)) || COLORS[categories.length % COLORS.length];
+}
+
+function openCatEditor(cat, onSaved) {
+  const color = cat ? cat.color : nextColor();
   catEditState = { cat, color, onSaved };
   el.catEditTitle.textContent = cat ? 'Editar categoría' : 'Nueva categoría';
   el.catName.value = cat ? cat.name : '';

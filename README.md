@@ -8,6 +8,25 @@ No hace falta pagar la cuenta de desarrollador de Apple (99 USD/año) ni pasar p
 
 ## Qué hace
 
+**Etapa 3 — Dictado inteligente**
+
+Después de dictar y tocar *Listo*, se abre la pantalla **Revisar**, donde ves cómo se va a guardar cada nota:
+
+| Si decís… | La app… |
+| --- | --- |
+| "En el **bufé** tengo que comprar luces" | Entiende *Buffet* aunque el dictado lo escriba mal (compara cómo **suena**). |
+| "**Categoría negocio:** subir los precios" / "Nota para el buffet: …" / "…, categoría buffet" | Lo toma como **orden**: la guarda ahí y saca la orden del texto. |
+| "**Importante:** …" / "…, **es urgente**" | La deja **fijada** arriba (y "no es urgente" no la fija). |
+| "En el buffet comprar hielo **y en el negocio** pagar al proveedor" / "**Otra nota:** …" | La separa en **varias notas**, cada una con su categoría. Podés **unirlas** o **quitar** alguna. |
+| "**Nueva categoría** gimnasio: pagar la cuota" / "En el gimnasio…" (si no existe) | Te ofrece **crear la categoría** ✨ (se crea recién al guardar). |
+
+- Muestra hasta **3 sugerencias** con su nivel de seguridad: *muy seguro*, *bastante seguro*, *no muy seguro*.
+- Te dice **por qué** eligió esa categoría ("dijiste «bufé», que suena como «Buffet»").
+- **Aprende de vos**: si la cambiás, recuerda las palabras de esa nota y la próxima vez acierta.
+- Podés **corregir el texto** antes de guardar; la sugerencia se actualiza sola.
+
+La lógica está en `interprete.js` y funciona dentro del teléfono, sin internet ni servicios pagos.
+
 **Etapa 2 — Categorías y nota rápida por voz**
 
 - **Categorías con color** (vienen Negocio, Ideas, Proyectos y Personal; podés crear, renombrar o borrar).
@@ -80,6 +99,7 @@ Cuando se publiquen cambios, la app los descarga sola la próxima vez que la abr
 | `index.html` | Estructura de las pantallas |
 | `styles.css` | Diseño (estilo iOS, claro/oscuro) |
 | `app.js` | Lógica: notas, búsqueda, guardado, copias de seguridad |
+| `interprete.js` | Entiende lo que dictás: categorías, órdenes, importancia, varias notas |
 | `sw.js` | Service worker: permite usarla sin internet |
 | `manifest.webmanifest` | Nombre, ícono y modo pantalla completa |
 | `icons/` | Íconos de la app |

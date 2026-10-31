@@ -115,25 +115,29 @@
       <p id="mic-status" class="mic-status"></p>
     </div>
     <textarea id="capture-text" placeholder="Ej.: En el buffet tengo que comprar luces led" autocapitalize="sentences" aria-label="Texto de la nota rápida"></textarea>
-    <p id="capture-hint" class="capture-hint">
-      Tocá el <strong>micrófono 🎤 del teclado</strong> (abajo a la derecha) y decí tu nota.
-      Si mencionás una categoría —por ejemplo <em>“en el negocio…”</em>— la reconozco y te pregunto antes de guardar.
-    </p>
+    <div id="capture-hint" class="capture-hint">
+      <p id="capture-hint-main">Tocá el <strong>micrófono 🎤 del teclado</strong> (abajo a la derecha) y decí tu nota.</p>
+      <ul class="voice-tips">
+        <li><strong>“En el buffet…”</strong> o <strong>“Categoría negocio: …”</strong> → va a esa categoría</li>
+        <li><strong>“Importante: …”</strong> o <strong>“…, es urgente”</strong> → queda fijada arriba</li>
+        <li><strong>“Otra nota: …”</strong> o cambiar de categoría → la separo en varias notas</li>
+        <li>Si nombrás una categoría que no existe, te ofrezco crearla</li>
+      </ul>
+    </div>
   </div>
 
-  <!-- ============ CONFIRMAR CATEGORÍA ============ -->
-  <div id="confirm" class="sheet" hidden>
-    <div class="sheet-backdrop"></div>
-    <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
-      <div class="sheet-group confirm-box">
-        <h3 id="confirm-title"></h3>
-        <p id="confirm-reason" class="confirm-reason"></p>
-        <blockquote id="confirm-text" class="confirm-text"></blockquote>
-        <div id="confirm-chips" class="chips wrap"></div>
-      </div>
-      <div class="sheet-group">
-        <button id="confirm-save" class="strong"></button>
-        <button id="confirm-edit">Seguir editando</button>
+  <!-- ============ REVISAR LO DICTADO ============ -->
+  <div id="review" class="review" hidden>
+    <header class="capture-bar">
+      <button class="text-btn accent" id="review-back">‹ Dictar</button>
+      <span class="strong" id="review-title">Revisar</span>
+      <button class="text-btn accent strong" id="review-save-top">Guardar</button>
+    </header>
+    <div class="review-scroll" id="review-scroll">
+      <div id="review-list"></div>
+      <div class="review-footer">
+        <button id="review-save" class="primary-btn"></button>
+        <button id="review-merge" class="text-btn accent" hidden>Unir todo en una sola nota</button>
       </div>
     </div>
   </div>
@@ -199,6 +203,7 @@
     <button id="toast-action" class="text-btn accent strong" hidden></button>
   </div>
 
+  <script src="interprete.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
