@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Notas">
+  <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+  <title>Notas</title>
+</head>
+<body>
+  <!-- ============ LISTA ============ -->
+  <section id="list-view" class="view">
+    <header class="topbar">
+      <span class="topbar-title" id="list-mini-title">Notas</span>
+      <button class="icon-btn accent" id="menu-btn" aria-label="Más opciones">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="7.5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="16.5" cy="12" r="1.4" fill="currentColor"/></svg>
+      </button>
+    </header>
+
+    <div class="list-head">
+      <h1>Notas</h1>
+      <label class="search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <input type="search" id="search" placeholder="Buscar" autocomplete="off" autocorrect="off" enterkeyhint="search">
+      </label>
+    </div>
+
+    <div id="install-hint" class="install-hint" hidden>
+      <p>Para instalarla, tocá <strong>Compartir</strong>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11H6v10h12V11h-2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        y después <strong>Agregar a pantalla de inicio</strong>.</p>
+      <button class="text-btn" id="install-hint-close">Entendido</button>
+    </div>
+
+    <main id="notes-list" aria-live="polite"></main>
+    <p id="empty" class="empty" hidden></p>
+
+    <footer class="bottombar">
+      <span></span>
+      <span id="count" class="count"></span>
+      <button class="icon-btn accent" id="new-btn" aria-label="Nueva nota">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 13v6.5A1.5 1.5 0 0 1 17.5 21h-13A1.5 1.5 0 0 1 3 19.5v-13A1.5 1.5 0 0 1 4.5 5H11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M18.4 3.6a1.9 1.9 0 0 1 2.7 2.7L12 15.4 8.5 16.3l.9-3.6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+      </button>
+    </footer>
+  </section>
+
+  <!-- ============ EDITOR ============ -->
+  <section id="editor-view" class="view" hidden>
+    <header class="topbar editor-bar">
+      <button class="back-btn accent" id="back-btn">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4 7 12l8 8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Notas
+      </button>
+      <div class="editor-actions">
+        <button class="icon-btn accent" id="pin-btn" aria-label="Fijar nota" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path class="pin-shape" d="M9 3h6l-1 6 4 4v2h-5v6l-1 1-1-1v-6H6v-2l4-4z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="icon-btn accent" id="share-btn" aria-label="Compartir nota">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 10H6v11h12V10h-2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="icon-btn accent" id="delete-btn" aria-label="Eliminar nota">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M9 6V4h6v2M6 6l1 14a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-14M10 10v7M14 10v7" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="text-btn accent strong" id="done-btn" hidden>OK</button>
+      </div>
+    </header>
+    <p id="editor-date" class="editor-date"></p>
+    <textarea id="editor" placeholder="Escribí algo…" spellcheck="true" autocapitalize="sentences" aria-label="Texto de la nota"></textarea>
+  </section>
+
+  <!-- ============ MENÚ (hoja de acciones) ============ -->
+  <div id="sheet" class="sheet" hidden>
+    <div class="sheet-backdrop" data-close></div>
+    <div class="sheet-panel" role="dialog" aria-modal="true" aria-label="Opciones">
+      <div class="sheet-group">
+        <p class="sheet-info" id="sheet-info"></p>
+        <button id="export-btn">Exportar copia de seguridad</button>
+        <button id="import-btn">Importar copia de seguridad</button>
+      </div>
+      <div class="sheet-group">
+        <button class="strong" data-close>Cancelar</button>
+      </div>
+    </div>
+  </div>
+  <input type="file" id="import-file" accept="application/json,.json" hidden>
+
+  <div id="toast" class="toast" role="status" hidden>
+    <span id="toast-text"></span>
+    <button id="toast-action" class="text-btn accent strong" hidden></button>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
