@@ -34,6 +34,8 @@
       </label>
     </div>
 
+    <nav id="chips" class="chips" aria-label="Categorías"></nav>
+
     <div id="install-hint" class="install-hint" hidden>
       <p>Para instalarla, tocá <strong>Compartir</strong>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 11H6v10h12V11h-2" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
@@ -45,7 +47,9 @@
     <p id="empty" class="empty" hidden></p>
 
     <footer class="bottombar">
-      <span></span>
+      <button class="icon-btn accent" id="voice-btn" aria-label="Nota rápida por voz">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
       <span id="count" class="count"></span>
       <button class="icon-btn accent" id="new-btn" aria-label="Nueva nota">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 13v6.5A1.5 1.5 0 0 1 17.5 21h-13A1.5 1.5 0 0 1 3 19.5v-13A1.5 1.5 0 0 1 4.5 5H11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M18.4 3.6a1.9 1.9 0 0 1 2.7 2.7L12 15.4 8.5 16.3l.9-3.6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
@@ -74,6 +78,9 @@
       </div>
     </header>
     <p id="editor-date" class="editor-date"></p>
+    <div class="editor-cat-row">
+      <button id="cat-btn" class="cat-chip" aria-label="Cambiar categoría"></button>
+    </div>
     <textarea id="editor" placeholder="Escribí algo…" spellcheck="true" autocapitalize="sentences" aria-label="Texto de la nota"></textarea>
   </section>
 
@@ -83,6 +90,7 @@
     <div class="sheet-panel" role="dialog" aria-modal="true" aria-label="Opciones">
       <div class="sheet-group">
         <p class="sheet-info" id="sheet-info"></p>
+        <button id="manage-btn">Administrar categorías</button>
         <button id="export-btn">Exportar copia de seguridad</button>
         <button id="import-btn">Importar copia de seguridad</button>
       </div>
@@ -92,6 +100,99 @@
     </div>
   </div>
   <input type="file" id="import-file" accept="application/json,.json" hidden>
+
+  <!-- ============ NOTA RÁPIDA (voz) ============ -->
+  <div id="capture" class="capture" hidden>
+    <header class="capture-bar">
+      <button class="text-btn accent" id="capture-cancel">Cancelar</button>
+      <span class="strong">Nota rápida</span>
+      <button class="text-btn accent strong" id="capture-done">Listo</button>
+    </header>
+    <div id="mic-area" class="mic-area" hidden>
+      <button id="mic-toggle" class="mic-btn" aria-label="Grabar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <p id="mic-status" class="mic-status"></p>
+    </div>
+    <textarea id="capture-text" placeholder="Ej.: En el buffet tengo que comprar luces led" autocapitalize="sentences" aria-label="Texto de la nota rápida"></textarea>
+    <p id="capture-hint" class="capture-hint">
+      Tocá el <strong>micrófono 🎤 del teclado</strong> (abajo a la derecha) y decí tu nota.
+      Si mencionás una categoría —por ejemplo <em>“en el negocio…”</em>— la reconozco y te pregunto antes de guardar.
+    </p>
+  </div>
+
+  <!-- ============ CONFIRMAR CATEGORÍA ============ -->
+  <div id="confirm" class="sheet" hidden>
+    <div class="sheet-backdrop"></div>
+    <div class="sheet-panel" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+      <div class="sheet-group confirm-box">
+        <h3 id="confirm-title"></h3>
+        <p id="confirm-reason" class="confirm-reason"></p>
+        <blockquote id="confirm-text" class="confirm-text"></blockquote>
+        <div id="confirm-chips" class="chips wrap"></div>
+      </div>
+      <div class="sheet-group">
+        <button id="confirm-save" class="strong"></button>
+        <button id="confirm-edit">Seguir editando</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ELEGIR CATEGORÍA (desde el editor) ============ -->
+  <div id="picker" class="sheet" hidden>
+    <div class="sheet-backdrop" data-close></div>
+    <div class="sheet-panel" role="dialog" aria-modal="true" aria-label="Elegir categoría">
+      <div class="sheet-group">
+        <p class="sheet-info">Mover la nota a…</p>
+        <div id="picker-list" class="row-list"></div>
+      </div>
+      <div class="sheet-group">
+        <button class="strong" data-close>Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ ADMINISTRAR CATEGORÍAS ============ -->
+  <div id="manage" class="sheet" hidden>
+    <div class="sheet-backdrop" data-close></div>
+    <div class="sheet-panel tall" role="dialog" aria-modal="true" aria-label="Categorías">
+      <div class="sheet-group">
+        <p class="sheet-info">Tocá una categoría para cambiarle el nombre, el color o las palabras clave que uso para reconocerla cuando dictás.</p>
+        <div id="manage-list" class="row-list"></div>
+      </div>
+      <div class="sheet-group">
+        <button class="strong" data-close>Listo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ CREAR / EDITAR CATEGORÍA ============ -->
+  <div id="cat-edit" class="modal" hidden>
+    <div class="sheet-backdrop"></div>
+    <form id="cat-form" class="modal-card" role="dialog" aria-modal="true" aria-labelledby="cat-edit-title" novalidate>
+      <h3 id="cat-edit-title">Nueva categoría</h3>
+      <label class="field">
+        <span>Nombre</span>
+        <input id="cat-name" maxlength="30" autocomplete="off" placeholder="Ej.: Buffet" required>
+      </label>
+      <div class="field">
+        <span>Color</span>
+        <div id="cat-colors" class="colors"></div>
+      </div>
+      <label class="field">
+        <span>Palabras clave <small>(opcional, separadas por comas)</small></span>
+        <textarea id="cat-keywords" rows="2" placeholder="Ej.: kiosco, cantina, proveedor de bebidas"></textarea>
+      </label>
+      <p class="field-hint">Si decís el nombre o alguna de estas palabras en una nota rápida, te sugiero esta categoría.</p>
+      <p id="cat-error" class="field-error" hidden></p>
+      <div class="modal-actions">
+        <button type="button" class="text-btn danger" id="cat-delete" hidden>Eliminar</button>
+        <span></span>
+        <button type="button" class="text-btn accent" id="cat-cancel">Cancelar</button>
+        <button type="submit" class="text-btn accent strong">Guardar</button>
+      </div>
+    </form>
+  </div>
 
   <div id="toast" class="toast" role="status" hidden>
     <span id="toast-text"></span>

@@ -6,7 +6,26 @@ Es una *web app instalable* (PWA): se instala desde Safari en la pantalla de ini
 abre a pantalla completa como cualquier app y **funciona sin internet**.
 No hace falta pagar la cuenta de desarrollador de Apple (99 USD/año) ni pasar por la App Store.
 
-## Qué hace (etapa 1)
+## Qué hace
+
+**Etapa 2 — Categorías y nota rápida por voz**
+
+- **Categorías con color** (vienen Negocio, Ideas, Proyectos y Personal; podés crear, renombrar o borrar).
+  Se filtran tocando los chips de arriba de la lista.
+- **Nota rápida por voz** (botón 🎤 abajo a la izquierda): dictás con el micrófono del teclado del iPhone,
+  tocás *Listo* y la app **detecta la categoría** ("En el buffet tengo que comprar luces led" → *Buffet*)
+  y te pregunta **"¿Guardar esta nota en Buffet?"** antes de guardarla. Te dice qué palabra reconoció
+  y podés elegir otra categoría con un toque.
+- **Palabras clave** por categoría (por ejemplo, para *Buffet*: cantina, kiosco) para que la reconozca aunque
+  no digas el nombre.
+- Cambiar la categoría de una nota desde el editor.
+- Si creás una nota estando dentro de una categoría, queda en esa categoría.
+
+> Si no ves el micrófono en el teclado: *Ajustes → General → Teclado → Activar Dictado*.
+
+Más detalles de por qué se hizo así en [INVESTIGACION.md](INVESTIGACION.md).
+
+**Etapa 1 — Lo básico**
 
 - Crear, editar y eliminar notas (la primera línea es el título, como en Notas de Apple).
 - Guardado automático mientras escribís.

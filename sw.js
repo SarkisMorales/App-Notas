@@ -1,6 +1,6 @@
 /* Service worker: guarda la app en el iPhone para que funcione sin internet.
    Cambiá CACHE_VERSION cada vez que publiques cambios importantes. */
-const CACHE_VERSION = 'notas-v1';
+const CACHE_VERSION = 'notas-v2';
 const ASSETS = [
   './',
   './index.html',
