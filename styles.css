@@ -862,3 +862,6 @@ body.editing .toast { bottom: calc(24px + var(--safe-bottom)); }
   font-size: 13px;
   color: var(--muted);
 }
+
+.mic-switch { font-size: 15px; padding: 6px 4px; }
+.capture-hint .mic-switch { display: block; margin-top: 4px; padding-left: 0; }

@@ -153,10 +153,12 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2.5" width="6" height="12" rx="3" fill="currentColor"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
       <p id="mic-status" class="mic-status"></p>
+      <button type="button" id="use-keyboard" class="text-btn accent mic-switch">⌨️ Prefiero usar el teclado</button>
     </div>
     <textarea id="capture-text" placeholder="Ej.: En el buffet tengo que comprar luces led" autocapitalize="sentences" aria-label="Texto de la nota rápida"></textarea>
     <div id="capture-hint" class="capture-hint">
       <p id="capture-hint-main">Tocá el <strong>micrófono 🎤 del teclado</strong> (abajo a la derecha) y decí tu nota.</p>
+      <button type="button" id="use-mic" class="text-btn accent mic-switch" hidden>🎙️ Usar el micrófono de la app</button>
       <ul class="voice-tips">
         <li><strong>“En el buffet…”</strong> o <strong>“Categoría negocio: …”</strong> → va a esa categoría</li>
         <li><strong>“Importante: …”</strong> o <strong>“…, es urgente”</strong> → queda fijada arriba</li>

@@ -137,6 +137,8 @@ const el = {
   micArea: $('mic-area'),
   micToggle: $('mic-toggle'),
   micStatus: $('mic-status'),
+  useKeyboard: $('use-keyboard'),
+  useMic: $('use-mic'),
   captureHintMain: $('capture-hint-main'),
   // Revisar lo dictado
   review: $('review'),
@@ -930,8 +932,17 @@ function isStandalone() {
 }
 // En la app instalada del iPhone, Apple no habilita el reconocimiento de voz web:
 // vamos directo al dictado del teclado.
+// Primero intentamos el micrófono de la app (el rojo, "Escuchando…").
+// Si el iPhone no lo permite, pasamos al dictado del teclado y lo recordamos.
+const VOICE_PREF = 'notas.voz'; // 'app' | 'teclado'
+function voicePref() {
+  try { return localStorage.getItem(VOICE_PREF); } catch (e) { return null; }
+}
+function setVoicePref(v) {
+  try { localStorage.setItem(VOICE_PREF, v); } catch (e) { /* sin acceso */ }
+}
 function canUseWebSpeech() {
-  return !!SpeechRec && !speechBlocked && !(isIOS() && isStandalone());
+  return !!SpeechRec && !speechBlocked && voicePref() !== 'teclado';
 }
 
 const HINT_KEYBOARD = el.captureHintMain.innerHTML;
@@ -947,6 +958,7 @@ function openCapture() {
 
   if (canUseWebSpeech()) {
     el.micArea.hidden = false;
+    el.useMic.hidden = true;
     el.captureHintMain.innerHTML = HINT_MIC;
     startListening();
   } else {
@@ -959,7 +971,25 @@ function openCapture() {
 function useKeyboardDictation() {
   el.micArea.hidden = true;
   el.captureHintMain.innerHTML = HINT_KEYBOARD;
+  el.useMic.hidden = !SpeechRec;
 }
+
+el.useKeyboard.addEventListener('click', () => {
+  stopListening();
+  setVoicePref('teclado');
+  useKeyboardDictation();
+  el.captureText.focus(); // dentro del toque: abre el teclado
+});
+
+el.useMic.addEventListener('click', () => {
+  setVoicePref('app');
+  speechBlocked = false;
+  el.captureText.blur();
+  el.micArea.hidden = false;
+  el.useMic.hidden = true;
+  el.captureHintMain.innerHTML = HINT_MIC;
+  startListening();
+});
 
 function updateMicUI() {
   el.micToggle.classList.toggle('listening', listening);
@@ -984,8 +1014,10 @@ function startListening() {
       updateMicUI();
       if (e.error !== 'no-speech' && e.error !== 'aborted') {
         speechBlocked = true;
+        // "service-not-allowed": este iPhone no lo permite → recordarlo para la próxima.
+        if (e.error === 'service-not-allowed') setVoicePref('teclado');
         useKeyboardDictation();
-        showToast('Usá el micrófono del teclado para dictar');
+        showToast('El micrófono de la app no anduvo: tocá el cuadro y usá el 🎤 del teclado');
       }
     };
     rec.onend = () => { listening = false; updateMicUI(); };
