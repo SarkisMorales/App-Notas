@@ -918,10 +918,15 @@ let speechBlocked = false;
 let rec = null;
 let listening = false;
 
-function speechLang() {
-  const l = navigator.language || 'es-AR';
-  return l.toLowerCase().startsWith('es') ? l : 'es-AR';
+// Idiomas a probar, en orden. Si el iPhone no acepta uno, se prueba el siguiente.
+function speechLangs() {
+  let l = navigator.language || 'es-AR';
+  if (!l.toLowerCase().startsWith('es')) l = 'es-AR';
+  if (/^es-419$/i.test(l) || /^es$/i.test(l)) l = 'es-MX';
+  const list = [l, 'es-MX', 'es-ES', 'es-US', ''];
+  return list.filter((x, i) => list.indexOf(x) === i);
 }
+let langIndex = 0;
 
 function isIOS() {
   return /iPhone|iPad|iPod/.test(navigator.userAgent) ||
@@ -934,15 +939,46 @@ function isStandalone() {
 // vamos directo al dictado del teclado.
 // Primero intentamos el micrófono de la app (el rojo, "Escuchando…").
 // Si el iPhone no lo permite, pasamos al dictado del teclado y lo recordamos.
-const VOICE_PREF = 'notas.voz'; // 'app' | 'teclado'
+const VOICE_PREF = 'notas.voz'; // 'app' | 'teclado' (solo si lo eligió la persona)
+const VOICE_ERR = 'notas.voz.error';
 function voicePref() {
   try { return localStorage.getItem(VOICE_PREF); } catch (e) { return null; }
 }
 function setVoicePref(v) {
   try { localStorage.setItem(VOICE_PREF, v); } catch (e) { /* sin acceso */ }
 }
+// Antes, un fallo dejaba el teléfono "trabado" en teclado para siempre. Lo liberamos una vez.
+try {
+  if (!localStorage.getItem('notas.voz.v2')) {
+    if (voicePref() === 'teclado') localStorage.removeItem(VOICE_PREF);
+    localStorage.setItem('notas.voz.v2', '1');
+  }
+} catch (e) { /* sin acceso */ }
+
 function canUseWebSpeech() {
   return !!SpeechRec && !speechBlocked && voicePref() !== 'teclado';
+}
+
+const SPEECH_ERRORS = {
+  'not-allowed': 'El iPhone no le dio permiso a la app para usar el micrófono o el reconocimiento de voz.',
+  'service-not-allowed': 'El iPhone no deja usar el reconocimiento de voz en esta app (puede ser Siri, el idioma de Siri o una restricción de Tiempo en pantalla).',
+  'network': 'El micrófono de la app necesita internet y no hay conexión.',
+  'audio-capture': 'No se pudo usar el micrófono (quizás otra app lo está usando, como una llamada).',
+  'language-not-supported': 'El idioma no está disponible para el reconocimiento de voz.',
+  'bad-grammar': 'El reconocimiento de voz dio un error interno.',
+  'sin-soporte': 'Este iPhone no trae reconocimiento de voz para apps web (puede ser por la versión de iOS).',
+  'no-arranco': 'El reconocimiento de voz no quiso arrancar.',
+};
+function speechErrorText(code) {
+  return SPEECH_ERRORS[code] || `Error del reconocimiento de voz: ${code}.`;
+}
+function rememberSpeechError(code, lang, detail) {
+  try {
+    localStorage.setItem(VOICE_ERR, JSON.stringify({ code, lang, detail: detail || '', at: Date.now() }));
+  } catch (e) { /* sin acceso */ }
+}
+function lastSpeechError() {
+  try { return JSON.parse(localStorage.getItem(VOICE_ERR) || 'null'); } catch (e) { return null; }
 }
 
 const HINT_KEYBOARD = el.captureHintMain.innerHTML;
@@ -997,14 +1033,27 @@ function updateMicUI() {
   el.micStatus.textContent = listening ? 'Escuchando… hablá tranquilo' : 'Tocá el micrófono para seguir dictando';
 }
 
+function speechFailed(code, detail) {
+  speechBlocked = true; // solo hasta cerrar la app; la próxima vez vuelve a probar
+  listening = false;
+  rememberSpeechError(code, rec ? rec.lang : '', detail);
+  updateMicUI();
+  useKeyboardDictation();
+  showToast(speechErrorText(code) + ' Por ahora usá el 🎤 del teclado.');
+}
+
 function startListening() {
+  if (!SpeechRec) { speechFailed('sin-soporte'); return; }
+  let gotResult = false;
   try {
     rec = new SpeechRec();
-    rec.lang = speechLang();
+    const lang = speechLangs()[langIndex] || '';
+    if (lang) rec.lang = lang;
     rec.continuous = true;
     rec.interimResults = true;
     const base = el.captureText.value.trim() ? el.captureText.value.trimEnd() + ' ' : '';
     rec.onresult = (e) => {
+      gotResult = true;
       let txt = '';
       for (let i = 0; i < e.results.length; i++) txt += e.results[i][0].transcript;
       el.captureText.value = base + txt.trim();
@@ -1012,22 +1061,23 @@ function startListening() {
     rec.onerror = (e) => {
       listening = false;
       updateMicUI();
-      if (e.error !== 'no-speech' && e.error !== 'aborted') {
-        speechBlocked = true;
-        // "service-not-allowed": este iPhone no lo permite → recordarlo para la próxima.
-        if (e.error === 'service-not-allowed') setVoicePref('teclado');
-        useKeyboardDictation();
-        showToast('El micrófono de la app no anduvo: tocá el cuadro y usá el 🎤 del teclado');
+      if (e.error === 'no-speech' || e.error === 'aborted') return;
+      // Idioma no aceptado (o servicio rechazado por el idioma): probar con otra variante de español.
+      if ((e.error === 'language-not-supported' || (e.error === 'service-not-allowed' && !gotResult)) &&
+          langIndex < speechLangs().length - 1) {
+        langIndex++;
+        setTimeout(startListening, 150);
+        return;
       }
+      speechFailed(e.error, e.message);
     };
     rec.onend = () => { listening = false; updateMicUI(); };
     rec.start();
     listening = true;
   } catch (err) {
     console.warn(err);
-    speechBlocked = true;
-    listening = false;
-    useKeyboardDictation();
+    speechFailed('no-arranco', err && (err.name + ': ' + err.message));
+    return;
   }
   updateMicUI();
 }
@@ -1675,6 +1725,30 @@ function openSheet() {
 function closeSheet() { el.sheet.hidden = true; }
 
 el.menuBtn.addEventListener('click', openSheet);
+
+$('mic-diag-btn').addEventListener('click', () => {
+  closeSheet();
+  const ua = navigator.userAgent;
+  const ios = (ua.match(/OS (\d+)_(\d+)(?:_(\d+))?/) || []).slice(1).filter(Boolean).join('.');
+  const err = lastSpeechError();
+  const pref = voicePref();
+  const lines = [
+    'Diagnóstico del micrófono',
+    '',
+    'iOS: ' + (ios || 'no es iPhone'),
+    'Abierta como: ' + (isStandalone() ? 'app instalada' : 'Safari'),
+    'Idioma del teléfono: ' + (navigator.language || '?'),
+    'Reconocimiento de voz: ' + (window.SpeechRecognition ? 'sí' : window.webkitSpeechRecognition ? 'sí (webkit)' : 'NO disponible'),
+    'Modo elegido: ' + (pref === 'teclado' ? 'teclado' : pref === 'app' ? 'micrófono de la app' : 'automático'),
+    'Último error: ' + (err
+      ? `${err.code}${err.lang ? ' (idioma ' + err.lang + ')' : ''}${err.detail ? ' – ' + err.detail : ''} · ${new Date(err.at).toLocaleString()}`
+      : 'ninguno'),
+    err ? '→ ' + speechErrorText(err.code) : '',
+    '',
+    'Sacale captura a esta pantalla.',
+  ];
+  alert(lines.filter((l, i) => l !== '' || i < lines.length).join('\n'));
+});
 el.sheet.addEventListener('click', (e) => {
   if (e.target.closest('[data-close]')) closeSheet();
 });
