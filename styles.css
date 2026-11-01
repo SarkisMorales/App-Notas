@@ -117,20 +117,42 @@ svg { width: 100%; height: 100%; display: block; }
   bottom: 0;
   z-index: 10;
   display: grid;
-  grid-template-columns: 44px 1fr 44px;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  padding: 0 calc(8px + var(--safe-right)) var(--safe-bottom) calc(8px + var(--safe-left));
-  min-height: calc(50px + var(--safe-bottom));
-  background: var(--bar);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
-  backdrop-filter: saturate(180%) blur(20px);
-  border-top: 0.5px solid var(--sep);
+  padding: 18px calc(22px + var(--safe-right)) calc(10px + var(--safe-bottom)) calc(22px + var(--safe-left));
+  /* Sin barra: los botones flotan y la lista se desvanece detrás */
+  background: linear-gradient(to bottom, transparent, var(--bg) 40%);
+  pointer-events: none;
 }
-.count { text-align: center; font-size: 12px; color: var(--text); }
+.bottombar > * { pointer-events: auto; }
+
+.fab {
+  width: 64px;
+  height: 64px;
+  padding: 17px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22);
+  transition: transform 0.12s ease;
+}
+.fab:active { transform: scale(0.92); }
+.fab-mic { background: #ff3b30; color: #fff; }
+.fab-new { background: #ffcc00; color: #1c1c1e; }
+.fab svg * { stroke-width: 2.2; }
+
+.count {
+  text-align: center;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--muted);
+  pointer-events: none;
+}
 
 /* ===================== Lista ===================== */
 #list-view {
-  padding-bottom: calc(80px + var(--safe-bottom));
+  padding-bottom: calc(110px + var(--safe-bottom));
 }
 
 .list-head {
@@ -382,7 +404,7 @@ mark {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(66px + var(--safe-bottom));
+  bottom: calc(100px + var(--safe-bottom));
   transform: translateX(-50%);
   z-index: 60;
   display: flex;
