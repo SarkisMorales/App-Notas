@@ -65,6 +65,7 @@
         Notas
       </button>
       <div class="editor-actions">
+        <button class="icon-btn accent aa-btn" id="format-btn" aria-label="Ajustes de letra" aria-expanded="false">Aa</button>
         <button class="icon-btn accent" id="pin-btn" aria-label="Fijar nota" aria-pressed="false">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path class="pin-shape" d="M9 3h6l-1 6 4 4v2h-5v6l-1 1-1-1v-6H6v-2l4-4z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
         </button>
@@ -77,6 +78,45 @@
         <button class="text-btn accent strong" id="done-btn" hidden>OK</button>
       </div>
     </header>
+    <div id="format-panel" class="format-panel" hidden>
+      <div class="fmt-row">
+        <span class="fmt-label">Tamaño</span>
+        <div class="fmt-size">
+          <button type="button" class="fmt-step" data-fmt="smaller" aria-label="Letra más chica"><span class="a-small">A</span></button>
+          <span id="fmt-size-label" class="fmt-size-label">Normal</span>
+          <button type="button" class="fmt-step" data-fmt="bigger" aria-label="Letra más grande"><span class="a-big">A</span></button>
+        </div>
+      </div>
+      <div class="fmt-row">
+        <span class="fmt-label">Letra</span>
+        <div class="seg" data-group="font">
+          <button type="button" data-value="system" class="f-system">Normal</button>
+          <button type="button" data-value="serif" class="f-serif">Clásica</button>
+          <button type="button" data-value="rounded" class="f-rounded">Redonda</button>
+          <button type="button" data-value="mono" class="f-mono">Máquina</button>
+        </div>
+      </div>
+      <div class="fmt-row">
+        <span class="fmt-label">Grosor</span>
+        <div class="seg" data-group="weight">
+          <button type="button" data-value="light" style="font-weight:300">Fina</button>
+          <button type="button" data-value="normal">Normal</button>
+          <button type="button" data-value="bold" style="font-weight:700">Gruesa</button>
+        </div>
+      </div>
+      <div class="fmt-row">
+        <span class="fmt-label">Espacio</span>
+        <div class="seg" data-group="spacing">
+          <button type="button" data-value="tight">Junto</button>
+          <button type="button" data-value="normal">Normal</button>
+          <button type="button" data-value="wide">Amplio</button>
+        </div>
+      </div>
+      <div class="fmt-foot">
+        <span>Se aplica a todas tus notas.</span>
+        <button type="button" class="text-btn accent" data-fmt="reset">Restablecer</button>
+      </div>
+    </div>
     <p id="editor-date" class="editor-date"></p>
     <div class="editor-cat-row">
       <button id="cat-btn" class="cat-chip" aria-label="Cambiar categoría"></button>

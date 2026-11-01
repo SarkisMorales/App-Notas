@@ -8,6 +8,15 @@ No hace falta pagar la cuenta de desarrollador de Apple (99 USD/año) ni pasar p
 
 ## Qué hace
 
+**Etapa 4 — Escribir más cómodo**
+
+- El **✓ de la barra del teclado** del iPhone **guarda la nota y te lleva a la lista** (también el botón *OK*).
+  Te avisa "Nota guardada en «Negocio»". Si el teclado se baja porque tocaste otro botón (fijar, compartir, Aa…), no sale.
+- En la **Nota rápida**, el ✓ del teclado pasa directo a *Revisar*.
+- Botón **Aa** en el editor para ajustar la letra: **tamaño** (7 niveles), **tipo** (Normal, Clásica, Redonda, Máquina),
+  **grosor** (Fina, Normal, Gruesa) y **espacio entre líneas**. Se aplica a todas las notas y se recuerda.
+  No pone títulos ni subtítulos automáticos.
+
 **Etapa 3 — Dictado inteligente**
 
 Después de dictar y tocar *Listo*, se abre la pantalla **Revisar**, donde ves cómo se va a guardar cada nota:

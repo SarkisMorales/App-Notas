@@ -91,6 +91,7 @@ let pushedHistory = false;
 let query = '';
 let saveTimer = null;
 let listScrollY = 0;
+let announceSave = false; // mostrar "Nota guardada" al salir del editor
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -110,6 +111,9 @@ const el = {
   shareBtn: $('share-btn'),
   deleteBtn: $('delete-btn'),
   doneBtn: $('done-btn'),
+  formatBtn: $('format-btn'),
+  formatPanel: $('format-panel'),
+  fmtSizeLabel: $('fmt-size-label'),
   catBtn: $('cat-btn'),
   editor: $('editor'),
   editorDate: $('editor-date'),
@@ -625,6 +629,9 @@ async function closeEditor() {
   if (!editorOpen) return;
   editorOpen = false;
   el.editor.blur();
+  toggleFormatPanel(false);
+  const announce = announceSave;
+  announceSave = false;
 
   const note = current;
   current = null;
@@ -644,6 +651,16 @@ async function closeEditor() {
   render();
   window.scrollTo(0, listScrollY);
   updateScrolled();
+  if (announce && note && note.text.trim()) {
+    const cat = catById(note.categoryId);
+    showToast(cat ? `Nota guardada en “${cat.name}”` : 'Nota guardada', 'Ver', () => openEditor(note, false));
+  }
+}
+
+/** Guardar y volver a la lista, avisando con un mensajito. */
+function saveAndExit() {
+  announceSave = true;
+  goBack();
 }
 
 function goBack() {
@@ -666,12 +683,34 @@ el.editor.addEventListener('input', () => {
 });
 
 el.editor.addEventListener('focus', () => { el.doneBtn.hidden = false; });
+
+/*
+ * El ✓ de la barra del teclado del iPhone no se puede detectar directamente:
+ * solo cierra el teclado (blur). Si el teclado se cerró sin que hayas tocado
+ * nada en la pantalla, fue ese ✓ → guardamos y volvemos a la lista.
+ * Si tocaste algo (fijar, compartir, categoría, Aa…), no salimos.
+ */
+let lastTouchAt = 0;
+document.addEventListener('touchstart', () => { lastTouchAt = Date.now(); }, { capture: true, passive: true });
+document.addEventListener('mousedown', () => { lastTouchAt = Date.now(); }, true);
+
 el.editor.addEventListener('blur', () => {
-  el.doneBtn.hidden = true;
+  // Se esconde un instante después: si lo escondemos ya, el toque en "OK" se pierde.
+  setTimeout(() => { if (document.activeElement !== el.editor) el.doneBtn.hidden = true; }, 350);
   flushSave();
+  const blurAt = Date.now();
+  if (blurAt - lastTouchAt < 700) return; // el teclado se cerró porque tocaste algo
+  setTimeout(() => {
+    if (!editorOpen || lastTouchAt > blurAt - 700) return;
+    if (document.visibilityState !== 'visible' || !document.hasFocus()) return; // la app pasó a segundo plano
+    const active = document.activeElement;
+    if (active && active !== document.body && active !== el.editor) return; // pasaste a otro campo
+    if (active === el.editor) return;
+    saveAndExit();
+  }, 250);
 });
 
-el.doneBtn.addEventListener('click', () => el.editor.blur());
+el.doneBtn.addEventListener('click', saveAndExit);
 el.backBtn.addEventListener('click', goBack);
 
 el.pinBtn.addEventListener('click', async () => {
@@ -705,6 +744,106 @@ el.deleteBtn.addEventListener('click', () => {
   if (note.text.trim()) deleteNote(note);
   else removeNote(note);
 });
+
+/* ---------- Ajustes de letra (Aa) ---------- */
+const FORMAT_KEY = 'notas.formato';
+const SIZES = [
+  { px: 14, label: 'Muy chica' },
+  { px: 15, label: 'Chica' },
+  { px: 17, label: 'Normal' },
+  { px: 19, label: 'Grande' },
+  { px: 22, label: 'Más grande' },
+  { px: 25, label: 'Muy grande' },
+  { px: 29, label: 'Enorme' },
+];
+const FONTS = {
+  system: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif',
+  serif: 'ui-serif, "New York", Georgia, "Times New Roman", serif',
+  rounded: 'ui-rounded, "SF Pro Rounded", -apple-system, system-ui, sans-serif',
+  mono: 'ui-monospace, "SF Mono", Menlo, monospace',
+};
+const WEIGHTS = { light: 300, normal: 400, bold: 600 };
+const SPACINGS = { tight: 1.25, normal: 1.45, wide: 1.8 };
+const DEFAULT_FORMAT = { size: 2, font: 'system', weight: 'normal', spacing: 'normal' };
+
+function loadFormat() {
+  try {
+    const f = JSON.parse(localStorage.getItem(FORMAT_KEY) || 'null') || {};
+    return {
+      size: Number.isInteger(f.size) && SIZES[f.size] ? f.size : DEFAULT_FORMAT.size,
+      font: FONTS[f.font] ? f.font : DEFAULT_FORMAT.font,
+      weight: WEIGHTS[f.weight] ? f.weight : DEFAULT_FORMAT.weight,
+      spacing: SPACINGS[f.spacing] ? f.spacing : DEFAULT_FORMAT.spacing,
+    };
+  } catch (e) {
+    return { ...DEFAULT_FORMAT };
+  }
+}
+
+let format = loadFormat();
+
+function applyFormat() {
+  const root = document.documentElement.style;
+  root.setProperty('--note-size', SIZES[format.size].px + 'px');
+  root.setProperty('--note-font', FONTS[format.font]);
+  root.setProperty('--note-weight', WEIGHTS[format.weight]);
+  root.setProperty('--note-line', SPACINGS[format.spacing]);
+
+  el.fmtSizeLabel.textContent = SIZES[format.size].label;
+  el.formatPanel.querySelector('[data-fmt="smaller"]').disabled = format.size === 0;
+  el.formatPanel.querySelector('[data-fmt="bigger"]').disabled = format.size === SIZES.length - 1;
+  el.formatPanel.querySelectorAll('.seg').forEach((seg) => {
+    const value = format[seg.dataset.group];
+    seg.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.value === value));
+  });
+  if (editorOpen) autoGrow();
+}
+
+function saveFormat() {
+  try { localStorage.setItem(FORMAT_KEY, JSON.stringify(format)); } catch (e) { /* sin acceso */ }
+  applyFormat();
+}
+
+function toggleFormatPanel(show) {
+  const open = show === undefined ? el.formatPanel.hidden : show;
+  el.formatPanel.hidden = !open;
+  el.formatBtn.setAttribute('aria-expanded', String(open));
+}
+
+// Si estabas escribiendo, el teclado sigue abierto mientras ajustás.
+let editorHadFocus = false;
+el.formatBtn.addEventListener('touchstart', () => { editorHadFocus = document.activeElement === el.editor; }, { passive: true });
+el.formatPanel.addEventListener('touchstart', () => { editorHadFocus = document.activeElement === el.editor; }, { passive: true });
+function keepTyping() {
+  if (editorHadFocus && document.activeElement !== el.editor) el.editor.focus({ preventScroll: true });
+}
+
+el.formatBtn.addEventListener('click', () => {
+  toggleFormatPanel();
+  keepTyping();
+});
+
+el.formatPanel.addEventListener('click', (e) => {
+  const b = e.target.closest('button');
+  if (!b) return;
+  const act = b.dataset.fmt;
+  if (act === 'smaller') format.size = Math.max(0, format.size - 1);
+  else if (act === 'bigger') format.size = Math.min(SIZES.length - 1, format.size + 1);
+  else if (act === 'reset') format = { ...DEFAULT_FORMAT };
+  else {
+    const seg = b.closest('.seg');
+    if (!seg) return;
+    format[seg.dataset.group] = b.dataset.value;
+  }
+  saveFormat();
+  keepTyping();
+});
+
+// Tocar el texto cierra el panel.
+el.editor.addEventListener('touchstart', () => { if (!el.formatPanel.hidden) toggleFormatPanel(false); }, { passive: true });
+el.editor.addEventListener('mousedown', () => { if (!el.formatPanel.hidden) toggleFormatPanel(false); });
+
+applyFormat();
 
 /* ---------- Cambiar la categoría desde el editor ---------- */
 function openPicker() {
@@ -886,6 +1025,18 @@ el.micToggle.addEventListener('click', () => {
 el.captureCancel.addEventListener('click', () => {
   if (el.captureText.value.trim() && !window.confirm('¿Descartar esta nota?')) return;
   closeCapture();
+});
+
+// El ✓ del teclado en la nota rápida = "Listo" (pasa a revisar).
+el.captureText.addEventListener('blur', () => {
+  const blurAt = Date.now();
+  if (blurAt - lastTouchAt < 700) return;
+  setTimeout(() => {
+    if (el.capture.hidden || !el.review.hidden || lastTouchAt > blurAt - 700) return;
+    if (document.visibilityState !== 'visible' || !document.hasFocus()) return;
+    if (document.activeElement === el.captureText || !el.captureText.value.trim()) return;
+    el.captureDone.click();
+  }, 250);
 });
 
 el.captureDone.addEventListener('click', () => {
