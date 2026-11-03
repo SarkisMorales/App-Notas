@@ -1018,7 +1018,7 @@ body.editing .toast { bottom: calc(24px + var(--safe-bottom)); }
 
 /* ===================== Ajustes de letra ===================== */
 :root {
-  --note-size: 17px;
+  --note-size: 26px;
   --note-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif;
   --note-weight: 400;
   --note-line: 1.45;

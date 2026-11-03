@@ -948,13 +948,14 @@ el.deleteBtn.addEventListener('click', () => {
 /* ---------- Ajustes de letra (Aa) ---------- */
 const FORMAT_KEY = 'notas.formato';
 const SIZES = [
-  { px: 14, label: 'Muy chica' },
-  { px: 15, label: 'Chica' },
-  { px: 17, label: 'Normal' },
-  { px: 19, label: 'Grande' },
-  { px: 22, label: 'Más grande' },
-  { px: 25, label: 'Muy grande' },
-  { px: 29, label: 'Enorme' },
+  // Todo 50% más grande que antes (Normal era 17px y ahora es 26px).
+  { px: 21, label: 'Muy chica' },
+  { px: 23, label: 'Chica' },
+  { px: 26, label: 'Normal' },
+  { px: 29, label: 'Grande' },
+  { px: 33, label: 'Más grande' },
+  { px: 38, label: 'Muy grande' },
+  { px: 44, label: 'Enorme' },
 ];
 const FONTS = {
   system: '-apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", system-ui, sans-serif',
