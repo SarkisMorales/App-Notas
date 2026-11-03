@@ -105,6 +105,7 @@
       </button>
       <div class="editor-actions">
         <button class="icon-btn accent aa-btn" id="format-btn" aria-label="Ajustes de letra" aria-expanded="false">Aa</button>
+        <button class="icon-btn accent" id="photo-btn" aria-label="Agregar foto" data-icon="camera"></button>
         <button class="icon-btn accent" id="pin-btn" aria-label="Fijar nota" aria-pressed="false">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path class="pin-shape" d="M9 3h6l-1 6 4 4v2h-5v6l-1 1-1-1v-6H6v-2l4-4z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
         </button>
@@ -161,7 +162,47 @@
       <button id="cat-btn" class="cat-chip" aria-label="Cambiar categoría"></button>
     </div>
     <textarea id="editor" placeholder="Escribí algo…" spellcheck="true" autocapitalize="sentences" aria-label="Texto de la nota"></textarea>
+    <div id="photo-grid" class="photo-grid" hidden></div>
   </section>
+
+  <!-- ============ AGREGAR FOTO ============ -->
+  <div id="photo-sheet" class="sheet" hidden>
+    <div class="sheet-backdrop" data-close></div>
+    <div class="sheet-panel" role="dialog" aria-modal="true" aria-label="Agregar foto">
+      <div class="sheet-group">
+        <p class="sheet-info">Agregar una foto a la nota</p>
+        <button data-src="camera">Sacar foto</button>
+        <button data-src="gallery">Elegir de la galería</button>
+      </div>
+      <div class="sheet-group">
+        <button class="strong" data-close>Cancelar</button>
+      </div>
+    </div>
+  </div>
+  <input type="file" id="photo-camera" accept="image/*" capture="environment" hidden>
+  <input type="file" id="photo-gallery" accept="image/*" multiple hidden>
+
+  <!-- ============ VER FOTO EN GRANDE ============ -->
+  <div id="photo-viewer" class="photo-viewer" hidden role="dialog" aria-modal="true" aria-label="Foto">
+    <div id="pv-track" class="pv-track"></div>
+    <header class="pv-top">
+      <button id="pv-close" class="pv-btn" aria-label="Cerrar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+      </button>
+      <span id="pv-count" class="pv-count"></span>
+      <span class="pv-spacer"></span>
+    </header>
+    <footer class="pv-bottom">
+      <button id="pv-share" class="pv-action">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 10H6v11h12V10h-2" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg>
+        Compartir / Guardar
+      </button>
+      <button id="pv-delete" class="pv-action danger">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M9 6V4h6v2M6 6l1 14a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Eliminar
+      </button>
+    </footer>
+  </div>
 
   <!-- ============ MENÚ (hoja de acciones) ============ -->
   <div id="sheet" class="sheet" hidden>

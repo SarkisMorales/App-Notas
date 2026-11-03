@@ -8,6 +8,18 @@ No hace falta pagar la cuenta de desarrollador de Apple (99 USD/año) ni pasar p
 
 ## Qué hace
 
+**Etapa 6 — Fotos en las notas**
+
+- En el editor, el botón 📷 te deja **sacar una foto** en el momento o **elegir de la galería** (varias a la vez).
+- Las fotos van **debajo del texto**, en cuadrícula. La ✕ quita una foto (pide confirmación).
+- Tocando una foto se ve **en grande**: deslizás para pasar a la siguiente, agrandás con dos dedos o doble toque,
+  y podés **Compartir / Guardar** (por ejemplo a Fotos o WhatsApp) o **Eliminar**.
+- En la lista, la primera foto aparece en la tarjeta con un numerito si hay varias.
+- Se guardan en **calidad intermedia** (lado mayor 1600 px), unos 200–450 KB cada una en vez de 3–5 MB,
+  solo en el iPhone y aparte de las notas para que la lista siga rápida.
+- **La copia de seguridad incluye las fotos** (el archivo pesa más) y al importarla vuelven con su nota.
+- Compartir una nota manda el texto y sus fotos juntos.
+
 **Etapa 5 — Diseño nuevo**
 
 - Tema oscuro con detalles en amarillo y una onda de luz de fondo.

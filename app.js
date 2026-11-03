@@ -5,9 +5,10 @@
    no se manda nada a ningún servidor.
    ========================================================= */
 const DB_NAME = 'notas-db';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const NOTES = 'notes';
 const CATS = 'categories';
+const PHOTOS = 'photos'; // fotos aparte: { id, noteId, blob, thumb, w, h, created }
 
 const COLORS = ['#ff9500', '#ff3b30', '#ffcc00', '#34c759', '#30b0c7', '#007aff', '#5856d6', '#af52de', '#ff2d55', '#8e8e93'];
 
@@ -28,6 +29,7 @@ function openDB() {
       req.onupgradeneeded = () => {
         const db = req.result;
         if (!db.objectStoreNames.contains(NOTES)) db.createObjectStore(NOTES, { keyPath: 'id' });
+        if (!db.objectStoreNames.contains(PHOTOS)) db.createObjectStore(PHOTOS, { keyPath: 'id' });
         if (!db.objectStoreNames.contains(CATS)) {
           const cats = db.createObjectStore(CATS, { keyPath: 'id' });
           const now = Date.now();
@@ -78,6 +80,13 @@ function makeStore(name) {
 }
 const noteStore = makeStore(NOTES);
 const catStore = makeStore(CATS);
+const photoStore = {
+  get: (id) => tx(PHOTOS, 'readonly', (s) => s.get(id)),
+  put: (rec) => tx(PHOTOS, 'readwrite', (s) => { s.put(rec); }),
+  putMany: (list) => tx(PHOTOS, 'readwrite', (s) => { list.forEach((r) => s.put(r)); }),
+  removeMany: (ids) => tx(PHOTOS, 'readwrite', (s) => { ids.forEach((id) => s.delete(id)); }),
+  keys: () => tx(PHOTOS, 'readonly', (s) => s.getAllKeys()),
+};
 
 /* =========================================================
    Estado
@@ -133,6 +142,17 @@ const el = {
   formatPanel: $('format-panel'),
   fmtSizeLabel: $('fmt-size-label'),
   catBtn: $('cat-btn'),
+  photoBtn: $('photo-btn'),
+  photoGrid: $('photo-grid'),
+  photoSheet: $('photo-sheet'),
+  photoCamera: $('photo-camera'),
+  photoGallery: $('photo-gallery'),
+  viewer: $('photo-viewer'),
+  pvTrack: $('pv-track'),
+  pvCount: $('pv-count'),
+  pvClose: $('pv-close'),
+  pvShare: $('pv-share'),
+  pvDelete: $('pv-delete'),
   editor: $('editor'),
   editorDate: $('editor-date'),
   sheet: $('sheet'),
@@ -205,7 +225,10 @@ function lines(text) {
 }
 
 function titleOf(note) {
-  return lines(note.text)[0] || 'Nota nueva';
+  const first = lines(note.text)[0];
+  if (first) return first;
+  const n = note.photos ? note.photos.length : 0;
+  return n ? (n === 1 ? 'Foto' : `${n} fotos`) : 'Nota nueva';
 }
 
 function previewOf(note, q) {
@@ -298,6 +321,7 @@ const ICONS = {
   archive: '<rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v10.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4"/>',
   doc: '<path d="M6.5 3h7.5l4.5 4.5v12A1.5 1.5 0 0 1 17 21H6.5A1.5 1.5 0 0 1 5 19.5v-15A1.5 1.5 0 0 1 6.5 3z"/><path d="M13.5 3v5h5M8.5 12.5h7M8.5 16h7"/>',
   pin: '<path d="M9 3h6l-1 6 4 4v2h-5v6l-1 1-1-1v-6H6v-2l4-4z"/>',
+  camera: '<path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h3l1.6-2.5h5.8L16.5 7h3A1.5 1.5 0 0 1 21 8.5v10a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/><circle cx="12" cy="13.2" r="3.6"/>',
   grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/>',
   // Íconos de categorías
   tag: '<path d="M3 12V4h8l9 9-8 8z"/><circle cx="7.5" cy="8.5" r="1.4"/>',
@@ -369,8 +393,13 @@ function catById(id) {
   return id ? categories.find((c) => c.id === id) || null : null;
 }
 
+/** Una nota "existe" si tiene texto o al menos una foto. */
+function hasContent(note) {
+  return !!note && (!!note.text.trim() || !!(note.photos && note.photos.length));
+}
+
 function liveNotes() {
-  return notes.filter((n) => n.text.trim());
+  return notes.filter(hasContent);
 }
 
 function inTab(n) {
@@ -538,7 +567,26 @@ function noteRow(note, rawQ, q) {
   btn.className = 'note-btn';
   const ico = document.createElement('span');
   ico.className = 'note-ico';
-  ico.innerHTML = icon('doc');
+  const photoIds = note.photos || [];
+  if (photoIds.length) {
+    // La primera foto reemplaza al ícono de documento.
+    ico.classList.add('has-thumb');
+    const img = document.createElement('img');
+    img.alt = '';
+    img.decoding = 'async';
+    const known = thumbURLs.get(photoIds[0]);
+    if (known) img.src = known;
+    else thumbURL(photoIds[0]).then((url) => { if (url) img.src = url; });
+    ico.append(img);
+    if (photoIds.length > 1) {
+      const n = document.createElement('span');
+      n.className = 'thumb-count';
+      n.textContent = photoIds.length;
+      ico.append(n);
+    }
+  } else {
+    ico.innerHTML = icon('doc');
+  }
   const main = document.createElement('span');
   main.className = 'note-main';
   const title = document.createElement('span');
@@ -687,7 +735,7 @@ el.list.addEventListener('click', (e) => {
    ========================================================= */
 function newNote(text, categoryId) {
   const now = Date.now();
-  return { id: uid(), text: text || '', created: now, updated: now, pinned: false, categoryId: categoryId || null };
+  return { id: uid(), text: text || '', created: now, updated: now, pinned: false, categoryId: categoryId || null, photos: [] };
 }
 
 async function persist(note) {
@@ -708,7 +756,7 @@ function scheduleSave() {
 function flushSave() {
   clearTimeout(saveTimer);
   saveTimer = null;
-  if (current && current.text.trim()) return persist(current);
+  if (current && hasContent(current)) return persist(current);
   return Promise.resolve();
 }
 
@@ -728,14 +776,14 @@ async function deleteNote(note) {
 
 async function togglePin(note) {
   note.pinned = !note.pinned;
-  if (note.text.trim()) await persist(note);
+  if (hasContent(note)) await persist(note);
   render();
   showToast(note.pinned ? 'Nota fijada en Favoritas' : 'Nota quitada de Favoritas');
 }
 
 async function toggleArchive(note) {
   note.archived = !note.archived;
-  if (note.text.trim()) await persist(note);
+  if (hasContent(note)) await persist(note);
   render();
   showToast(note.archived ? 'Nota archivada' : 'Nota recuperada', 'Deshacer', async () => {
     note.archived = !note.archived;
@@ -745,8 +793,24 @@ async function toggleArchive(note) {
 }
 
 async function shareNote(note) {
-  if (!note || !note.text.trim()) { showToast('La nota está vacía'); return; }
+  if (!hasContent(note)) { showToast('La nota está vacía'); return; }
   const text = note.text;
+  if (note.photos && note.photos.length && navigator.share && navigator.canShare) {
+    try {
+      const recs = await Promise.all(note.photos.map((id) => photoStore.get(id)));
+      const files = recs.filter((r) => r && r.blob)
+        .map((r, i) => new File([r.blob], `foto-${i + 1}.jpg`, { type: 'image/jpeg' }));
+      const data = text.trim() ? { text, files } : { files };
+      if (files.length && navigator.canShare(data)) {
+        await navigator.share(data);
+        return;
+      }
+    } catch (err) {
+      if (err && err.name === 'AbortError') return;
+      console.error(err);
+    }
+  }
+  if (!text.trim()) { showToast('No se pudieron compartir las fotos'); return; }
   if (navigator.share) {
     try { await navigator.share({ text }); } catch (err) { /* el usuario canceló */ }
     return;
@@ -824,6 +888,7 @@ function openEditor(note, focus) {
   el.editorView.classList.add('view-enter');
   window.scrollTo(0, 0);
   updateEditorChrome();
+  renderEditorPhotos();
   autoGrow();
 
   if (!pushedHistory) {
@@ -843,6 +908,8 @@ async function closeEditor() {
   editorOpen = false;
   el.editor.blur();
   toggleFormatPanel(false);
+  closeViewer();
+  el.photoSheet.hidden = true;
   const announce = announceSave;
   announceSave = false;
 
@@ -858,13 +925,13 @@ async function closeEditor() {
   el.listView.classList.add('view-enter');
 
   if (note) {
-    if (note.text.trim()) await persist(note);
+    if (hasContent(note)) await persist(note);
     else await removeNote(note); // las notas vacías no se guardan
   }
   render();
   window.scrollTo(0, listScrollY);
   updateScrolled();
-  if (announce && note && note.text.trim()) {
+  if (announce && hasContent(note)) {
     const cat = catById(note.categoryId);
     showToast(cat ? `Nota guardada en “${cat.name}”` : 'Nota guardada', 'Ver', () => openEditor(note, false));
   }
@@ -930,7 +997,7 @@ el.pinBtn.addEventListener('click', async () => {
   if (!current) return;
   current.pinned = !current.pinned;
   updateEditorChrome();
-  if (current.text.trim()) await persist(current);
+  if (hasContent(current)) await persist(current);
   showToast(current && current.pinned ? 'Nota fijada en Favoritas' : 'Nota quitada de Favoritas');
 });
 
@@ -941,8 +1008,363 @@ el.deleteBtn.addEventListener('click', () => {
   if (!note) return;
   current = null; // así closeEditor no la vuelve a guardar
   goBack();
-  if (note.text.trim()) deleteNote(note);
+  if (hasContent(note)) deleteNote(note);
   else removeNote(note);
+});
+
+/* =========================================================
+   Fotos: sacar una foto o elegirla de la galería.
+   Se achican a calidad intermedia (lado mayor 1600 px, JPEG 0,78)
+   y se guardan aparte de las notas, solo en este iPhone.
+   ========================================================= */
+const PHOTO_MAX = 1600;
+const PHOTO_QUALITY = 0.78;
+const THUMB_MAX = 360;
+const THUMB_QUALITY = 0.7;
+
+const thumbURLs = new Map(); // id de foto → URL de la miniatura (ya cargada)
+const thumbLoads = new Map(); // id → promesa en curso
+
+function thumbURL(id) {
+  if (thumbURLs.has(id)) return Promise.resolve(thumbURLs.get(id));
+  if (!thumbLoads.has(id)) {
+    thumbLoads.set(id, photoStore.get(id).then((rec) => {
+      thumbLoads.delete(id);
+      const blob = rec && (rec.thumb || rec.blob);
+      if (!blob) return null;
+      const url = URL.createObjectURL(blob);
+      thumbURLs.set(id, url);
+      return url;
+    }).catch(() => { thumbLoads.delete(id); return null; }));
+  }
+  return thumbLoads.get(id);
+}
+
+function forgetThumbs(ids) {
+  ids.forEach((id) => {
+    const url = thumbURLs.get(id);
+    if (url) URL.revokeObjectURL(url);
+    thumbURLs.delete(id);
+  });
+}
+
+function loadImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('imagen')); };
+    img.src = url; // Safari ya endereza la foto según cómo se sacó (EXIF)
+  });
+}
+
+function drawScaled(img, max, quality) {
+  const w0 = img.naturalWidth || img.width;
+  const h0 = img.naturalHeight || img.height;
+  const k = Math.min(1, max / Math.max(w0, h0));
+  const w = Math.max(1, Math.round(w0 * k));
+  const h = Math.max(1, Math.round(h0 * k));
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff'; // por si es un PNG con transparencia
+  ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(img, 0, 0, w, h);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      canvas.width = 0; // libera memoria enseguida (importante en iPhone)
+      canvas.height = 0;
+      if (blob) resolve({ blob, w, h }); else reject(new Error('toBlob'));
+    }, 'image/jpeg', quality);
+  });
+}
+
+async function makePhoto(file, noteId) {
+  const img = await loadImageFile(file);
+  const full = await drawScaled(img, PHOTO_MAX, PHOTO_QUALITY);
+  const thumb = await drawScaled(img, THUMB_MAX, THUMB_QUALITY);
+  return { id: uid(), noteId, blob: full.blob, thumb: thumb.blob, w: full.w, h: full.h, created: Date.now() };
+}
+
+async function addPhotos(fileList) {
+  const note = current;
+  const files = [...(fileList || [])].filter((f) => !f.type || f.type.startsWith('image/'));
+  if (!note || !files.length) return;
+  showToast(files.length === 1 ? 'Agregando la foto…' : `Agregando ${files.length} fotos…`);
+  let added = 0;
+  let failed = 0;
+  for (const file of files) {
+    try {
+      const rec = await makePhoto(file, note.id);
+      await photoStore.put(rec);
+      note.photos = [...(note.photos || []), rec.id];
+      note.updated = Date.now();
+      await persist(note);
+      added++;
+      if (note === current) { renderEditorPhotos(); updateEditorChrome(); }
+    } catch (err) {
+      console.error(err);
+      failed++;
+    }
+  }
+  if (failed && !added) showToast(failed === 1 ? 'No se pudo agregar la foto' : 'No se pudieron agregar las fotos');
+  else if (failed) showToast(`Se agregaron ${added}, ${failed} no se pudieron leer`);
+  else showToast(added === 1 ? 'Foto agregada' : `Se agregaron ${added} fotos`);
+}
+
+async function removePhoto(note, id) {
+  note.photos = (note.photos || []).filter((p) => p !== id);
+  note.updated = Date.now();
+  if (hasContent(note)) await persist(note);
+  try { await photoStore.removeMany([id]); } catch (err) { console.error(err); }
+  forgetThumbs([id]);
+  if (note === current) { renderEditorPhotos(); updateEditorChrome(); }
+}
+
+/** Borra las fotos que ya no pertenecen a ninguna nota (p. ej. de notas eliminadas). */
+async function cleanOrphanPhotos() {
+  try {
+    const used = new Set();
+    [...notes, current].forEach((n) => ((n && n.photos) || []).forEach((p) => used.add(p)));
+    const orphans = (await photoStore.keys()).filter((k) => !used.has(k));
+    if (orphans.length) await photoStore.removeMany(orphans);
+  } catch (err) {
+    console.warn('fotos huérfanas:', err);
+  }
+}
+
+/* ---------- Fotos en el editor (debajo del texto) ---------- */
+function renderEditorPhotos() {
+  const ids = (current && current.photos) || [];
+  el.editorView.classList.toggle('has-photos', ids.length > 0);
+  el.photoGrid.hidden = ids.length === 0;
+  el.photoGrid.replaceChildren();
+  ids.forEach((id, i) => {
+    const cell = document.createElement('div');
+    cell.className = 'photo-cell';
+    cell.dataset.id = id;
+    const open = document.createElement('button');
+    open.className = 'photo-open';
+    open.setAttribute('aria-label', `Ver foto ${i + 1}`);
+    const img = document.createElement('img');
+    img.alt = '';
+    img.decoding = 'async';
+    thumbURL(id).then((url) => { if (url) img.src = url; });
+    open.append(img);
+    const del = document.createElement('button');
+    del.className = 'photo-del';
+    del.setAttribute('aria-label', 'Quitar foto');
+    del.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7l10 10M17 7 7 17" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/></svg>';
+    cell.append(open, del);
+    el.photoGrid.append(cell);
+  });
+  if (ids.length) {
+    const add = document.createElement('button');
+    add.className = 'photo-add';
+    add.setAttribute('aria-label', 'Agregar otra foto');
+    add.innerHTML = icon('camera') + '<span>Agregar</span>';
+    el.photoGrid.append(add);
+  }
+  if (editorOpen) autoGrow();
+}
+
+el.photoGrid.addEventListener('click', (e) => {
+  if (!current) return;
+  if (e.target.closest('.photo-add')) { openPhotoSheet(); return; }
+  const cell = e.target.closest('.photo-cell');
+  if (!cell) return;
+  const id = cell.dataset.id;
+  if (e.target.closest('.photo-del')) {
+    if (confirm('¿Quitar esta foto de la nota?')) removePhoto(current, id);
+    return;
+  }
+  openViewer(current, current.photos.indexOf(id));
+});
+
+/* ---------- Menú: Sacar foto / Elegir de la galería ---------- */
+function openPhotoSheet() {
+  el.editor.blur();
+  el.photoSheet.hidden = false;
+}
+el.photoBtn.addEventListener('click', openPhotoSheet);
+el.photoSheet.addEventListener('click', (e) => {
+  if (e.target.closest('[data-close]')) { el.photoSheet.hidden = true; return; }
+  const b = e.target.closest('[data-src]');
+  if (!b) return;
+  el.photoSheet.hidden = true;
+  // Tiene que ser dentro del mismo toque para que iOS abra la cámara / la galería.
+  const input = b.dataset.src === 'camera' ? el.photoCamera : el.photoGallery;
+  input.value = '';
+  input.click();
+});
+[el.photoCamera, el.photoGallery].forEach((input) => {
+  input.addEventListener('change', () => {
+    const files = input.files ? [...input.files] : [];
+    input.value = '';
+    addPhotos(files);
+  });
+});
+
+/* ---------- Visor a pantalla completa ---------- */
+const viewer = { note: null, ids: [], urls: new Map(), index: 0 };
+
+async function fullURL(id) {
+  if (viewer.urls.has(id)) return viewer.urls.get(id);
+  const rec = await photoStore.get(id);
+  const url = rec && rec.blob ? URL.createObjectURL(rec.blob) : null;
+  if (url) viewer.urls.set(id, url);
+  return url;
+}
+
+function openViewer(note, index) {
+  viewer.note = note;
+  viewer.ids = [...(note.photos || [])];
+  if (!viewer.ids.length) return;
+  el.editor.blur();
+  el.pvTrack.replaceChildren();
+  viewer.ids.forEach((id) => {
+    const slide = document.createElement('div');
+    slide.className = 'pv-slide';
+    const img = document.createElement('img');
+    img.alt = 'Foto de la nota';
+    // Mientras carga la grande, mostramos la miniatura.
+    thumbURL(id).then((u) => { if (u && !img.dataset.full) img.src = u; });
+    fullURL(id).then((u) => { if (u) { img.dataset.full = '1'; img.src = u; } });
+    slide.append(img);
+    el.pvTrack.append(slide);
+  });
+  el.viewer.hidden = false;
+  document.body.classList.add('viewing');
+  goToSlide(Math.max(0, index), false);
+}
+
+function closeViewer() {
+  if (el.viewer.hidden) return;
+  el.viewer.hidden = true;
+  document.body.classList.remove('viewing');
+  resetZoom();
+  el.pvTrack.replaceChildren();
+  viewer.urls.forEach((u) => URL.revokeObjectURL(u));
+  viewer.urls.clear();
+  viewer.note = null;
+}
+
+function goToSlide(i, smooth) {
+  viewer.index = Math.min(Math.max(0, i), viewer.ids.length - 1);
+  el.pvTrack.scrollTo({ left: viewer.index * el.pvTrack.clientWidth, behavior: smooth ? 'smooth' : 'auto' });
+  updateViewerCounter();
+}
+
+function updateViewerCounter() {
+  el.pvCount.textContent = viewer.ids.length > 1 ? `${viewer.index + 1} de ${viewer.ids.length}` : '';
+}
+
+el.pvTrack.addEventListener('scroll', () => {
+  const w = el.pvTrack.clientWidth || 1;
+  const i = Math.round(el.pvTrack.scrollLeft / w);
+  if (i !== viewer.index) { viewer.index = i; resetZoom(); updateViewerCounter(); }
+}, { passive: true });
+
+el.pvClose.addEventListener('click', closeViewer);
+
+el.pvShare.addEventListener('click', async () => {
+  const id = viewer.ids[viewer.index];
+  if (!id) return;
+  try {
+    const rec = await photoStore.get(id);
+    const file = new File([rec.blob], `foto-${todayStamp()}.jpg`, { type: 'image/jpeg' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file] });
+    } else {
+      showToast('Mantené apretada la foto para guardarla');
+    }
+  } catch (err) {
+    if (!err || err.name !== 'AbortError') showToast('No se pudo compartir la foto');
+  }
+});
+
+el.pvDelete.addEventListener('click', async () => {
+  const note = viewer.note;
+  const id = viewer.ids[viewer.index];
+  if (!note || !id || !confirm('¿Eliminar esta foto de la nota?')) return;
+  await removePhoto(note, id);
+  const at = viewer.index;
+  if (!(note.photos || []).length) { closeViewer(); return; }
+  openViewer(note, Math.min(at, note.photos.length - 1));
+});
+
+/* Zoom con dos dedos, arrastrar cuando está agrandada y doble toque. */
+const zoom = { scale: 1, x: 0, y: 0, img: null, pinch: null, pan: null, lastTap: 0 };
+
+function currentImg() {
+  const slide = el.pvTrack.children[viewer.index];
+  return slide ? slide.querySelector('img') : null;
+}
+function applyZoom() {
+  if (!zoom.img) return;
+  zoom.img.style.transform = zoom.scale > 1 ? `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})` : '';
+  el.viewer.classList.toggle('zoomed', zoom.scale > 1);
+}
+function resetZoom() {
+  if (zoom.img) zoom.img.style.transform = '';
+  zoom.scale = 1; zoom.x = 0; zoom.y = 0; zoom.img = null; zoom.pinch = null; zoom.pan = null;
+  el.viewer.classList.remove('zoomed');
+}
+function clampPan() {
+  if (!zoom.img) return;
+  const r = zoom.img.getBoundingClientRect();
+  const w = r.width / zoom.scale, h = r.height / zoom.scale; // tamaño sin zoom
+  const mx = Math.max(0, (w * zoom.scale - window.innerWidth) / 2);
+  const my = Math.max(0, (h * zoom.scale - window.innerHeight) / 2);
+  zoom.x = Math.min(mx, Math.max(-mx, zoom.x));
+  zoom.y = Math.min(my, Math.max(-my, zoom.y));
+}
+const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+
+el.pvTrack.addEventListener('touchstart', (e) => {
+  const img = currentImg();
+  if (!img) return;
+  if (zoom.img !== img) { resetZoom(); zoom.img = img; }
+  if (e.touches.length === 2) {
+    zoom.pinch = { d: dist(e.touches[0], e.touches[1]), scale: zoom.scale };
+    zoom.pan = null;
+  } else if (e.touches.length === 1 && zoom.scale > 1) {
+    zoom.pan = { x: e.touches[0].clientX - zoom.x, y: e.touches[0].clientY - zoom.y };
+  }
+}, { passive: true });
+
+el.pvTrack.addEventListener('touchmove', (e) => {
+  if (zoom.pinch && e.touches.length === 2) {
+    e.preventDefault();
+    zoom.scale = Math.min(5, Math.max(1, zoom.pinch.scale * dist(e.touches[0], e.touches[1]) / zoom.pinch.d));
+    clampPan();
+    applyZoom();
+  } else if (zoom.pan && e.touches.length === 1 && zoom.scale > 1) {
+    e.preventDefault();
+    zoom.x = e.touches[0].clientX - zoom.pan.x;
+    zoom.y = e.touches[0].clientY - zoom.pan.y;
+    clampPan();
+    applyZoom();
+  }
+}, { passive: false });
+
+el.pvTrack.addEventListener('touchend', (e) => {
+  if (e.touches.length < 2) zoom.pinch = null;
+  if (e.touches.length === 0) {
+    zoom.pan = null;
+    if (zoom.scale < 1.05) resetZoom();
+    // Doble toque: agranda o vuelve al tamaño normal.
+    const now = Date.now();
+    if (e.changedTouches.length === 1 && now - zoom.lastTap < 300) {
+      const img = currentImg();
+      if (zoom.scale > 1) resetZoom();
+      else if (img) { zoom.img = img; zoom.scale = 2.5; applyZoom(); }
+      zoom.lastTap = 0;
+    } else {
+      zoom.lastTap = now;
+    }
+  }
 });
 
 /* ---------- Ajustes de letra (Aa) ---------- */
@@ -1084,7 +1506,7 @@ async function setNoteCategory(note, id) {
   if (!note) return;
   note.categoryId = id || null;
   if (note === current) updateEditorChrome();
-  if (note.text.trim()) await persist(note);
+  if (hasContent(note)) await persist(note);
   if (!editorOpen) render();
   const cat = catById(id);
   showToast(cat ? `Nota movida a “${cat.name}”` : 'Nota sin categoría');
@@ -2015,9 +2437,13 @@ window.addEventListener('scroll', () => {
    Menú: categorías, exportar / importar
    ========================================================= */
 function openSheet() {
-  const total = liveNotes().length;
+  const live = liveNotes();
+  const total = live.length;
+  const photos = live.reduce((k, n) => k + ((n.photos && n.photos.length) || 0), 0);
   el.sheetInfo.textContent =
-    `Tenés ${total === 1 ? '1 nota' : total + ' notas'} y ${categories.length === 1 ? '1 categoría' : categories.length + ' categorías'} guardadas en este iPhone. ` +
+    `Tenés ${total === 1 ? '1 nota' : total + ' notas'}` +
+    (photos ? `, ${photos === 1 ? '1 foto' : photos + ' fotos'}` : '') +
+    ` y ${categories.length === 1 ? '1 categoría' : categories.length + ' categorías'} guardadas en este iPhone. ` +
     'Hacé una copia de seguridad de vez en cuando y guardala en Archivos o iCloud Drive.';
   el.sheet.hidden = false;
 }
@@ -2058,17 +2484,54 @@ function todayStamp() {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(',')[1] || '');
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+}
+
+function base64ToBlob(b64, type) {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], { type: type || 'image/jpeg' });
+}
+
 el.exportBtn.addEventListener('click', async () => {
   closeSheet();
-  const payload = {
+  const live = liveNotes();
+  const photoIds = [...new Set(live.flatMap((n) => n.photos || []))];
+  if (photoIds.length) showToast('Preparando la copia con fotos…');
+
+  // El archivo se arma por partes para no juntar todas las fotos en un solo texto gigante.
+  const head = JSON.stringify({
     app: 'notas',
-    version: 2,
+    version: 3,
     exportedAt: new Date().toISOString(),
     categories,
-    notes: liveNotes(),
-  };
+    notes: live,
+  });
+  const parts = [head.slice(0, -1), ',"photos":['];
+  let first = true;
+  for (const id of photoIds) {
+    let rec = null;
+    try { rec = await photoStore.get(id); } catch (err) { console.error(err); }
+    if (!rec || !rec.blob) continue;
+    const item = {
+      id: rec.id, noteId: rec.noteId, w: rec.w, h: rec.h, created: rec.created,
+      data: await blobToBase64(rec.blob),
+      thumb: rec.thumb ? await blobToBase64(rec.thumb) : undefined,
+    };
+    parts.push((first ? '' : ',') + JSON.stringify(item));
+    first = false;
+  }
+  parts.push(']}');
+
   const name = `notas-${todayStamp()}.json`;
-  const file = new File([JSON.stringify(payload, null, 2)], name, { type: 'application/json' });
+  const file = new File(parts, name, { type: 'application/json' });
 
   // En iPhone, compartir el archivo permite "Guardar en Archivos".
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -2106,6 +2569,7 @@ function sanitizeNote(n) {
     pinned: !!n.pinned,
     archived: !!n.archived,
     categoryId: typeof n.categoryId === 'string' && n.categoryId ? n.categoryId : null,
+    photos: Array.isArray(n.photos) ? n.photos.filter((p) => typeof p === 'string' && p) : [],
   };
 }
 
@@ -2138,7 +2602,7 @@ el.importFile.addEventListener('change', async () => {
 
     const incoming = (Array.isArray(data) ? data : data.notes || [])
       .map(sanitizeNote)
-      .filter((n) => n && n.text.trim())
+      .filter((n) => hasContent(n))
       .map((n) => ({ ...n, categoryId: n.categoryId ? idMap.get(n.categoryId) || (catById(n.categoryId) ? n.categoryId : null) : null }));
 
     const byId = new Map(notes.map((n) => [n.id, n]));
@@ -2149,11 +2613,39 @@ el.importFile.addEventListener('change', async () => {
       if (existing) Object.assign(existing, n); else notes.push(n);
       toSave.push(existing || n);
     }
+    // Fotos de las notas importadas (las copias viejas no tienen).
+    const wanted = new Set(toSave.flatMap((n) => n.photos || []));
+    const photoRecs = [];
+    for (const p of Array.isArray(data.photos) ? data.photos : []) {
+      if (!p || typeof p.id !== 'string' || !wanted.has(p.id) || typeof p.data !== 'string') continue;
+      try {
+        photoRecs.push({
+          id: p.id,
+          noteId: typeof p.noteId === 'string' ? p.noteId : null,
+          blob: base64ToBlob(p.data),
+          thumb: typeof p.thumb === 'string' ? base64ToBlob(p.thumb) : null,
+          w: Number(p.w) || 0,
+          h: Number(p.h) || 0,
+          created: Number.isFinite(p.created) ? p.created : Date.now(),
+        });
+      } catch (err) { console.error(err); }
+    }
+    // Sacamos de las notas las fotos que no venían en el archivo.
+    const present = new Set(photoRecs.map((r) => r.id));
+    let existingPhotos = new Set();
+    try { existingPhotos = new Set(await photoStore.keys()); } catch (err) { /* sin fotos */ }
+    toSave.forEach((n) => { n.photos = (n.photos || []).filter((id) => present.has(id) || existingPhotos.has(id)); });
+    if (photoRecs.length) {
+      forgetThumbs(photoRecs.map((r) => r.id));
+      for (let k = 0; k < photoRecs.length; k += 20) await photoStore.putMany(photoRecs.slice(k, k + 20));
+    }
+
     if (newCats.length) await catStore.putMany(newCats);
     if (toSave.length) await noteStore.putMany(toSave);
     render();
     if (!toSave.length && !newCats.length) showToast(incoming.length ? 'Ya tenías todas esas notas' : 'El archivo no tiene notas');
-    else showToast(`Se importaron ${toSave.length} ${toSave.length === 1 ? 'nota' : 'notas'}`);
+    else showToast(`Se importaron ${toSave.length} ${toSave.length === 1 ? 'nota' : 'notas'}` +
+      (photoRecs.length ? ` y ${photoRecs.length} ${photoRecs.length === 1 ? 'foto' : 'fotos'}` : ''));
   } catch (err) {
     console.error(err);
     showToast('No se pudo leer el archivo');
@@ -2223,6 +2715,7 @@ async function init() {
     showToast('No se pudieron cargar las notas');
   }
   render();
+  setTimeout(cleanOrphanPhotos, 1500);
 
   // Pedimos que el sistema no borre los datos por falta de espacio.
   if (navigator.storage && navigator.storage.persist) {
