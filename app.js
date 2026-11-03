@@ -92,6 +92,10 @@ let query = '';
 let saveTimer = null;
 let listScrollY = 0;
 let announceSave = false; // mostrar "Nota guardada" al salir del editor
+let tab = 'notas';        // 'notas' | 'favoritas' | 'archivadas'
+const SORT_KEY = 'notas.orden';
+const SORTS = { updated: 'Última modificación', created: 'Fecha de creación', alpha: 'Título (A–Z)' };
+let sortBy = (() => { try { const v = localStorage.getItem(SORT_KEY); return SORTS[v] ? v : 'updated'; } catch (e) { return 'updated'; } })();
 
 const $ = (id) => document.getElementById(id);
 const el = {
@@ -103,6 +107,20 @@ const el = {
   count: $('count'),
   search: $('search'),
   listMiniTitle: $('list-mini-title'),
+  listTitle: $('list-title'),
+  listSubtitle: $('list-subtitle'),
+  searchBtn: $('search-btn'),
+  searchRow: $('search-row'),
+  searchCancel: $('search-cancel'),
+  sortBtn: $('sort-btn'),
+  sortSheet: $('sort-sheet'),
+  sortList: $('sort-list'),
+  tabbar: $('tabbar'),
+  noteMenu: $('note-menu'),
+  noteMenuTitle: $('note-menu-title'),
+  noteMenuPin: $('note-menu-pin'),
+  noteMenuArchive: $('note-menu-archive'),
+  catIcons: $('cat-icons'),
   newBtn: $('new-btn'),
   voiceBtn: $('voice-btn'),
   menuBtn: $('menu-btn'),
@@ -267,6 +285,76 @@ function dot(color) {
   return s;
 }
 
+/* ---------- Íconos (trazos, 24×24) ---------- */
+const ICONS = {
+  compose: '<path d="M19 13v6.5A1.5 1.5 0 0 1 17.5 21h-13A1.5 1.5 0 0 1 3 19.5v-13A1.5 1.5 0 0 1 4.5 5H11"/><path d="M18.4 3.6a1.9 1.9 0 0 1 2.7 2.7L12 15.4 8.5 16.3l.9-3.6z"/>',
+  search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/>',
+  sliders: '<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2.2"/><circle cx="8" cy="17" r="2.2"/>',
+  more: '<circle cx="5.5" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="18.5" cy="12" r="1.3" fill="currentColor"/>',
+  mic: '<rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/>',
+  check: '<circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.7 2.7L16 10"/>',
+  notes: '<rect x="5" y="4" width="14" height="17" rx="2.2"/><path d="M9 2.8h6v3H9zM8.5 11h7M8.5 14.5h7M8.5 18h4"/>',
+  star: '<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z"/>',
+  archive: '<rect x="3" y="4" width="18" height="5" rx="1.5"/><path d="M5 9v10.5A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V9M10 13h4"/>',
+  doc: '<path d="M6.5 3h7.5l4.5 4.5v12A1.5 1.5 0 0 1 17 21H6.5A1.5 1.5 0 0 1 5 19.5v-15A1.5 1.5 0 0 1 6.5 3z"/><path d="M13.5 3v5h5M8.5 12.5h7M8.5 16h7"/>',
+  pin: '<path d="M9 3h6l-1 6 4 4v2h-5v6l-1 1-1-1v-6H6v-2l4-4z"/>',
+  grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/>',
+  // Íconos de categorías
+  tag: '<path d="M3 12V4h8l9 9-8 8z"/><circle cx="7.5" cy="8.5" r="1.4"/>',
+  store: '<path d="M4.5 10v10h15V10"/><path d="M3 9.2 4.6 4h14.8L21 9.2a2.6 2.6 0 0 1-4.5 1.7 2.6 2.6 0 0 1-4.5 0 2.6 2.6 0 0 1-4.5 0A2.6 2.6 0 0 1 3 9.2z"/><path d="M9.5 20v-5h5v5"/>',
+  bulb: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.6.5 1.1 1.3 1.1 2.2h5c0-.9.5-1.7 1.1-2.2A6 6 0 0 0 12 3z"/>',
+  layers: '<path d="M12 3 2.5 8 12 13l9.5-5z"/><path d="M2.5 12 12 17l9.5-5"/><path d="M2.5 16 12 21l9.5-5"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  utensils: '<path d="M7 3v18M4.5 3v5a2.5 2.5 0 0 0 5 0V3"/><path d="M17 21V3c-2 1-3.5 3.5-3.5 7v3H17"/>',
+  home: '<path d="M3.5 11 12 4l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5h4v5"/>',
+  cart: '<circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2.5 3.5h3l2.3 11.5h11l2-8H6.6"/>',
+  briefcase: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8.5 7V5a1.5 1.5 0 0 1 1.5-1.5h4A1.5 1.5 0 0 1 15.5 5v2M3 13h18"/>',
+  book: '<path d="M4 19.5v-15A1.5 1.5 0 0 1 5.5 3H20v15H5.5A1.5 1.5 0 0 0 4 19.5zm0 0A1.5 1.5 0 0 0 5.5 21H20v-3"/>',
+  heart: '<path d="M12 20s-7.5-4.6-7.5-10.2A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 7.5 2.8C19.5 15.4 12 20 12 20z"/>',
+};
+const CAT_ICONS = ['tag', 'store', 'bulb', 'layers', 'user', 'utensils', 'home', 'cart', 'briefcase', 'book', 'heart', 'star'];
+
+function icon(name) {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ICONS.tag}</svg>`;
+}
+document.querySelectorAll('[data-icon]').forEach((n) => { n.innerHTML = icon(n.dataset.icon); });
+
+/** Ícono de una categoría: el elegido o uno que adivinamos por el nombre. */
+function catIcon(cat) {
+  if (cat && CAT_ICONS.includes(cat.icon)) return cat.icon;
+  const n = cat ? words(cat.name) : '';
+  const rules = [
+    [/negocio|venta|tienda|local|comercio|kiosco|emprend/, 'store'],
+    [/idea/, 'bulb'],
+    [/proyecto|plan/, 'layers'],
+    [/personal|\byo\b|perfil/, 'user'],
+    [/buffet|bufet|comida|cocina|receta|restaurant|cantina|bar\b/, 'utensils'],
+    [/casa|hogar|depto|departamento/, 'home'],
+    [/compra|super|mercado|lista/, 'cart'],
+    [/trabajo|oficina|laburo|empresa/, 'briefcase'],
+    [/estudio|facu|escuela|curso|libro|leer|colegio/, 'book'],
+    [/salud|amor|pareja|familia|novi/, 'heart'],
+  ];
+  for (const [re, ic] of rules) if (re.test(n)) return ic;
+  return 'tag';
+}
+
+/** Ícono de categoría pintado con su color. */
+function catGlyph(cat) {
+  const s = document.createElement('span');
+  s.className = 'cat-glyph';
+  s.style.color = cat.color;
+  s.innerHTML = icon(catIcon(cat));
+  return s;
+}
+
+function hexToRgba(hex, a) {
+  let h = (hex || '#8e8e93').replace('#', '');
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  const n = parseInt(h.slice(0, 6), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`;
+}
+
 const ICON_PIN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l-1 6 4 4v2h-5v6l-1 1-1-1v-6H6v-2l4-4z" fill="currentColor"/></svg>';
 const ICON_TRASH = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M9 6V4h6v2M6 6l1 14a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
@@ -285,18 +373,31 @@ function liveNotes() {
   return notes.filter((n) => n.text.trim());
 }
 
-function countIn(catId) {
-  return liveNotes().filter((n) => (catId === 'none' ? !catById(n.categoryId) : n.categoryId === catId)).length;
+function inTab(n) {
+  if (tab === 'archivadas') return !!n.archived;
+  if (n.archived) return false;
+  return tab === 'favoritas' ? !!n.pinned : true;
+}
+
+function tabNotes() {
+  return liveNotes().filter(inTab);
+}
+
+function countIn(catId, all) {
+  return (all ? liveNotes() : tabNotes()).filter((n) => (catId === 'none' ? !catById(n.categoryId) : n.categoryId === catId)).length;
 }
 
 function renderChips() {
   const frag = document.createDocumentFragment();
-  const make = (key, label, color, count) => {
+  const make = (key, label, cat, count) => {
     const b = document.createElement('button');
     b.className = 'chip' + (filter === key ? ' active' : '');
     b.dataset.filter = key;
-    if (color) b.append(dot(color));
-    b.append(label);
+    const ic = document.createElement('span');
+    ic.className = 'chip-ico';
+    if (cat) ic.style.color = cat.color;
+    ic.innerHTML = icon(cat ? catIcon(cat) : key === 'all' ? 'grid' : 'doc');
+    b.append(ic, label);
     if (count != null) {
       const c = document.createElement('span');
       c.className = 'chip-count';
@@ -306,7 +407,7 @@ function renderChips() {
     frag.append(b);
   };
   make('all', 'Todas', null, null);
-  for (const c of sortedCategories()) make(c.id, c.name, c.color, countIn(c.id));
+  for (const c of sortedCategories()) make(c.id, c.name, c, countIn(c.id));
   const loose = countIn('none');
   if (loose && categories.length) make('none', 'Sin categoría', null, loose);
 
@@ -336,54 +437,78 @@ el.chips.addEventListener('click', (e) => {
 /* =========================================================
    Lista de notas
    ========================================================= */
+const TAB_TEXT = {
+  notas: { title: 'Notas', sub: 'Organizá tus ideas, proyectos y tareas', one: 'nota', many: 'notas', none: 'Sin notas' },
+  favoritas: { title: 'Favoritas', sub: 'Tus notas fijadas, siempre a mano', one: 'favorita', many: 'favoritas', none: 'Sin favoritas' },
+  archivadas: { title: 'Archivadas', sub: 'Notas que guardaste aparte', one: 'archivada', many: 'archivadas', none: 'Sin archivadas' },
+};
+
+function sortKey(n) {
+  return sortBy === 'created' ? n.created : n.updated;
+}
+
 function render() {
   if (filter !== 'all' && filter !== 'none' && !catById(filter)) filter = 'all';
   renderChips();
 
   const rawQ = query.trim();
   const q = normalize(rawQ);
-  const visible = liveNotes()
+  const visible = tabNotes()
     .filter((n) => filter === 'all' || (filter === 'none' ? !catById(n.categoryId) : n.categoryId === filter))
     .filter((n) => !q || normalize(n.text).includes(q))
-    .sort((a, b) => b.updated - a.updated);
+    .sort((a, b) => (sortBy === 'alpha'
+      ? titleOf(a).localeCompare(titleOf(b), 'es', { sensitivity: 'base' })
+      : sortKey(b) - sortKey(a)));
 
-  // Grupos: primero las fijadas, después por fecha.
+  // Grupos por fecha (Hoy, Ayer…). Dentro de cada grupo, las fijadas van primero.
   const groups = [];
   const byLabel = new Map();
-  const addTo = (label, note) => {
+  for (const note of visible) {
+    const label = sortBy === 'alpha' ? '' : groupLabel(sortKey(note));
     if (!byLabel.has(label)) {
       const g = { label, items: [] };
       byLabel.set(label, g);
       groups.push(g);
     }
     byLabel.get(label).items.push(note);
-  };
-  visible.filter((n) => n.pinned).forEach((n) => addTo('Fijadas', n));
-  visible.filter((n) => !n.pinned).forEach((n) => addTo(groupLabel(n.updated), n));
+  }
+  for (const g of groups) g.items.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
 
   const frag = document.createDocumentFragment();
   for (const g of groups) {
     const section = document.createElement('section');
     section.className = 'group';
-    const h2 = document.createElement('h2');
-    h2.textContent = g.label;
+    if (g.label) {
+      const h2 = document.createElement('h2');
+      h2.textContent = g.label;
+      section.append(h2);
+    }
     const ul = document.createElement('ul');
-    ul.className = 'card';
+    ul.className = 'cards';
     for (const note of g.items) ul.append(noteRow(note, rawQ, q));
-    section.append(h2, ul);
+    section.append(ul);
     frag.append(section);
   }
   el.list.replaceChildren(frag);
 
-  const total = liveNotes().length;
-  el.count.textContent = total === 0 ? 'Sin notas' : total === 1 ? '1 nota' : `${total} notas`;
+  const t = TAB_TEXT[tab];
+  const total = tabNotes().length;
+  el.count.textContent = total === 0 ? t.none : total === 1 ? `1 ${t.one}` : `${total} ${t.many}`;
+  el.listTitle.textContent = t.title;
+  el.listSubtitle.textContent = t.sub;
+  el.tabbar.querySelectorAll('.tab').forEach((b) => {
+    b.classList.toggle('active', b.dataset.tab === tab);
+    b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false');
+  });
 
   const cat = catById(filter);
-  el.listMiniTitle.textContent = cat ? cat.name : filter === 'none' ? 'Sin categoría' : 'Notas';
+  el.listMiniTitle.textContent = cat ? cat.name : filter === 'none' ? 'Sin categoría' : t.title;
 
   if (visible.length === 0) {
     el.empty.hidden = false;
     if (q) el.empty.textContent = `No hay resultados para “${rawQ}”.`;
+    else if (tab === 'favoritas') el.empty.textContent = cat ? `No hay favoritas en “${cat.name}”.` : 'Todavía no tenés favoritas.\nTocá ⋯ en una nota y elegí “Fijar en Favoritas”.';
+    else if (tab === 'archivadas') el.empty.textContent = cat ? `No hay notas archivadas en “${cat.name}”.` : 'No hay notas archivadas.\nTocá ⋯ en una nota y elegí “Archivar” para guardarla aparte.';
     else if (cat) el.empty.textContent = `Todavía no hay notas en “${cat.name}”.\nTocá el lápiz para escribir una, o el micrófono para dictarla.`;
     else if (filter === 'none') el.empty.textContent = 'No hay notas sin categoría.';
     else el.empty.textContent = 'Todavía no tenés notas.\nTocá el lápiz para escribir una, o el micrófono para dictarla.';
@@ -396,6 +521,9 @@ function noteRow(note, rawQ, q) {
   const li = document.createElement('li');
   li.className = 'note';
   li.dataset.id = note.id;
+  const cat = catById(note.categoryId);
+  const accent = cat ? cat.color : note.pinned ? '#ffcc00' : 'rgba(255,255,255,0.28)';
+  li.style.setProperty('--cat', accent);
 
   const actions = document.createElement('div');
   actions.className = 'note-actions';
@@ -403,8 +531,16 @@ function noteRow(note, rawQ, q) {
     `<button class="act-pin" aria-label="${note.pinned ? 'Desfijar' : 'Fijar'}">${ICON_PIN}${note.pinned ? 'Desfijar' : 'Fijar'}</button>` +
     `<button class="act-delete" aria-label="Eliminar">${ICON_TRASH}Eliminar</button>`;
 
+  const row = document.createElement('div');
+  row.className = 'note-row';
+
   const btn = document.createElement('button');
   btn.className = 'note-btn';
+  const ico = document.createElement('span');
+  ico.className = 'note-ico';
+  ico.innerHTML = icon('doc');
+  const main = document.createElement('span');
+  main.className = 'note-main';
   const title = document.createElement('span');
   title.className = 'note-title';
   appendHighlighted(title, titleOf(note), rawQ);
@@ -412,22 +548,40 @@ function noteRow(note, rawQ, q) {
   sub.className = 'note-sub';
   const date = document.createElement('span');
   date.className = 'note-date';
-  date.textContent = shortDate(note.updated);
+  date.textContent = shortDate(sortBy === 'created' ? note.created : note.updated);
   const prev = document.createElement('span');
   appendHighlighted(prev, previewOf(note, q), rawQ);
   sub.append(date, prev);
-  btn.append(title, sub);
+  main.append(title, sub);
 
-  const cat = catById(note.categoryId);
   if (cat && filter === 'all') {
     const tag = document.createElement('span');
-    tag.className = 'note-cat';
+    tag.className = 'note-badge';
+    tag.style.color = cat.color;
+    tag.style.background = hexToRgba(cat.color, 0.16);
     tag.append(dot(cat.color), cat.name);
-    btn.append(tag);
+    main.append(tag);
   }
+  btn.append(ico, main);
 
-  li.append(actions, btn);
-  attachSwipe(li, btn);
+  const side = document.createElement('div');
+  side.className = 'note-side';
+  if (note.pinned) {
+    const pin = document.createElement('span');
+    pin.className = 'note-pin';
+    pin.innerHTML = icon('pin');
+    pin.title = 'Fijada';
+    side.append(pin);
+  }
+  const more = document.createElement('button');
+  more.className = 'note-more';
+  more.setAttribute('aria-label', 'Opciones de la nota');
+  more.innerHTML = icon('more');
+  side.append(more);
+
+  row.append(btn, side);
+  li.append(actions, row);
+  attachSwipe(li, row);
   return li;
 }
 
@@ -437,7 +591,7 @@ let openRow = null;
 let lastSwipeAt = 0;
 
 function setRowOffset(li, x) {
-  li.querySelector('.note-btn').style.transform = x ? `translateX(${x}px)` : '';
+  li.querySelector('.note-row').style.transform = x ? `translateX(${x}px)` : '';
 }
 function openSwipe(li) {
   if (openRow && openRow !== li) closeSwipe(openRow);
@@ -516,6 +670,11 @@ el.list.addEventListener('click', (e) => {
     deleteNote(note);
     return;
   }
+  if (e.target.closest('.note-more')) {
+    if (li.classList.contains('open')) { closeSwipe(li); return; }
+    openNoteMenu(note);
+    return;
+  }
   if (e.target.closest('.note-btn')) {
     if (Date.now() - lastSwipeAt < 350) return;
     if (li.classList.contains('open')) { closeSwipe(li); return; }
@@ -571,8 +730,60 @@ async function togglePin(note) {
   note.pinned = !note.pinned;
   if (note.text.trim()) await persist(note);
   render();
-  showToast(note.pinned ? 'Nota fijada' : 'Nota desfijada');
+  showToast(note.pinned ? 'Nota fijada en Favoritas' : 'Nota quitada de Favoritas');
 }
+
+async function toggleArchive(note) {
+  note.archived = !note.archived;
+  if (note.text.trim()) await persist(note);
+  render();
+  showToast(note.archived ? 'Nota archivada' : 'Nota recuperada', 'Deshacer', async () => {
+    note.archived = !note.archived;
+    await persist(note);
+    render();
+  });
+}
+
+async function shareNote(note) {
+  if (!note || !note.text.trim()) { showToast('La nota está vacía'); return; }
+  const text = note.text;
+  if (navigator.share) {
+    try { await navigator.share({ text }); } catch (err) { /* el usuario canceló */ }
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast('Nota copiada al portapapeles');
+  } catch (err) {
+    showToast('No se pudo compartir');
+  }
+}
+
+/* ---------- Menú ⋯ de cada nota ---------- */
+let menuNote = null;
+function openNoteMenu(note) {
+  menuNote = note;
+  el.noteMenuTitle.textContent = titleOf(note);
+  el.noteMenuPin.textContent = note.pinned ? 'Quitar de Favoritas' : 'Fijar en Favoritas';
+  el.noteMenuArchive.textContent = note.archived ? 'Sacar de Archivadas' : 'Archivar';
+  el.noteMenu.hidden = false;
+}
+el.noteMenu.addEventListener('click', (e) => {
+  if (e.target.closest('[data-close]')) { el.noteMenu.hidden = true; return; }
+  const b = e.target.closest('[data-act]');
+  if (!b || !menuNote) return;
+  const note = menuNote;
+  el.noteMenu.hidden = true;
+  menuNote = null;
+  switch (b.dataset.act) {
+    case 'pin': togglePin(note); break;
+    case 'move': openPicker(note); break;
+    case 'archive': toggleArchive(note); break;
+    case 'share': shareNote(note); break;
+    case 'delete': deleteNote(note); break;
+    default: break;
+  }
+});
 
 /* =========================================================
    Editor
@@ -591,7 +802,7 @@ function updateEditorChrome() {
   el.pinBtn.setAttribute('aria-label', current.pinned ? 'Desfijar nota' : 'Fijar nota');
 
   const cat = catById(current.categoryId);
-  el.catBtn.replaceChildren(dot(cat ? cat.color : null), cat ? cat.name : 'Sin categoría');
+  el.catBtn.replaceChildren(cat ? catGlyph(cat) : dot(null), cat ? cat.name : 'Sin categoría');
   const chev = document.createElement('span');
   chev.className = 'chev';
   chev.textContent = '▼';
@@ -720,23 +931,10 @@ el.pinBtn.addEventListener('click', async () => {
   current.pinned = !current.pinned;
   updateEditorChrome();
   if (current.text.trim()) await persist(current);
-  showToast(current && current.pinned ? 'Nota fijada' : 'Nota desfijada');
+  showToast(current && current.pinned ? 'Nota fijada en Favoritas' : 'Nota quitada de Favoritas');
 });
 
-el.shareBtn.addEventListener('click', async () => {
-  if (!current || !current.text.trim()) { showToast('La nota está vacía'); return; }
-  const text = current.text;
-  if (navigator.share) {
-    try { await navigator.share({ text }); } catch (err) { /* el usuario canceló */ }
-    return;
-  }
-  try {
-    await navigator.clipboard.writeText(text);
-    showToast('Nota copiada al portapapeles');
-  } catch (err) {
-    showToast('No se pudo compartir');
-  }
-});
+el.shareBtn.addEventListener('click', () => shareNote(current));
 
 el.deleteBtn.addEventListener('click', () => {
   const note = current;
@@ -848,19 +1046,21 @@ el.editor.addEventListener('mousedown', () => { if (!el.formatPanel.hidden) togg
 applyFormat();
 
 /* ---------- Cambiar la categoría desde el editor ---------- */
-function openPicker() {
-  if (!current) return;
+let pickerNote = null;
+function openPicker(note) {
+  pickerNote = note && !(note instanceof Event) ? note : current;
+  if (!pickerNote) return;
   el.editor.blur();
   const frag = document.createDocumentFragment();
-  const row = (id, label, color) => {
+  const row = (id, label, cat) => {
     const b = document.createElement('button');
     b.dataset.cat = id;
-    b.append(dot(color));
+    b.append(cat ? catGlyph(cat) : dot(null));
     const main = document.createElement('span');
     main.className = 'row-main';
     main.textContent = label;
     b.append(main);
-    if ((current.categoryId || '') === id) {
+    if ((pickerNote.categoryId || '') === id) {
       const check = document.createElement('span');
       check.className = 'row-check';
       check.textContent = '✓';
@@ -868,7 +1068,7 @@ function openPicker() {
     }
     frag.append(b);
   };
-  for (const c of sortedCategories()) row(c.id, c.name, c.color);
+  for (const c of sortedCategories()) row(c.id, c.name, c);
   row('', 'Sin categoría', null);
   const add = document.createElement('button');
   add.className = 'row-add';
@@ -879,31 +1079,77 @@ function openPicker() {
   el.picker.hidden = false;
 }
 
-async function setCurrentCategory(id) {
-  if (!current) return;
-  current.categoryId = id || null;
-  updateEditorChrome();
-  if (current.text.trim()) await persist(current);
+async function setNoteCategory(note, id) {
+  if (!note) return;
+  note.categoryId = id || null;
+  if (note === current) updateEditorChrome();
+  if (note.text.trim()) await persist(note);
+  if (!editorOpen) render();
   const cat = catById(id);
   showToast(cat ? `Nota movida a “${cat.name}”` : 'Nota sin categoría');
 }
 
-el.catBtn.addEventListener('click', openPicker);
+el.catBtn.addEventListener('click', () => openPicker(current));
 el.pickerList.addEventListener('click', (e) => {
   const b = e.target.closest('button');
   if (!b) return;
+  const note = pickerNote;
   el.picker.hidden = true;
   if (b.dataset.cat === '__add') {
-    openCatEditor(null, (cat) => setCurrentCategory(cat.id));
+    openCatEditor(null, (cat) => setNoteCategory(note, cat.id));
   } else {
-    setCurrentCategory(b.dataset.cat);
+    setNoteCategory(note, b.dataset.cat);
   }
 });
 
 /* ---------- Nueva nota (escrita) ---------- */
 el.newBtn.addEventListener('click', () => {
   const inCat = catById(filter);
-  openEditor(newNote('', inCat ? inCat.id : null), true);
+  const note = newNote('', inCat ? inCat.id : null);
+  if (tab === 'favoritas') note.pinned = true;
+  if (tab === 'archivadas') { tab = 'notas'; render(); }
+  openEditor(note, true);
+});
+
+/* ---------- Pestañas de abajo ---------- */
+el.tabbar.addEventListener('click', (e) => {
+  const b = e.target.closest('.tab');
+  if (!b || b.dataset.tab === tab) return;
+  tab = b.dataset.tab;
+  render();
+  window.scrollTo(0, 0);
+});
+
+/* ---------- Ordenar ---------- */
+function renderSortList() {
+  el.sortList.replaceChildren(...Object.entries(SORTS).map(([key, label]) => {
+    const b = document.createElement('button');
+    b.dataset.sort = key;
+    const main = document.createElement('span');
+    main.className = 'row-main';
+    main.textContent = label;
+    b.append(main);
+    if (key === sortBy) {
+      const check = document.createElement('span');
+      check.className = 'row-check';
+      check.textContent = '✓';
+      b.append(check);
+    }
+    return b;
+  }));
+}
+el.sortBtn.addEventListener('click', () => {
+  renderSortList();
+  el.sortSheet.hidden = false;
+});
+el.sortSheet.addEventListener('click', (e) => {
+  if (e.target.closest('[data-close]')) { el.sortSheet.hidden = true; return; }
+  const b = e.target.closest('[data-sort]');
+  if (!b) return;
+  sortBy = b.dataset.sort;
+  try { localStorage.setItem(SORT_KEY, sortBy); } catch (err) { /* sin acceso */ }
+  el.sortSheet.hidden = true;
+  render();
 });
 
 /* =========================================================
@@ -986,6 +1232,7 @@ const HINT_MIC = 'Si el micrófono no responde, tocá el cuadro de texto y usá 
 
 function openCapture() {
   if (openRow) closeSwipe(openRow);
+  if (tab === 'archivadas') { tab = 'notas'; render(); }
   el.search.blur();
   el.toast.hidden = true;
   el.captureText.value = '';
@@ -1551,6 +1798,21 @@ function renderColorPicker(selected) {
   }));
 }
 
+function renderIconPicker() {
+  if (!catEditState) return;
+  const { iconName, color } = catEditState;
+  el.catIcons.replaceChildren(...CAT_ICONS.map((name) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'icon-choice' + (name === iconName ? ' selected' : '');
+    b.dataset.icon = name;
+    b.style.color = name === iconName ? color : '';
+    b.setAttribute('aria-label', `Ícono ${name}`);
+    b.innerHTML = icon(name);
+    return b;
+  }));
+}
+
 function nextColor() {
   const used = new Set(categories.map((c) => c.color));
   return COLORS.find((c) => !used.has(c)) || COLORS[categories.length % COLORS.length];
@@ -1558,13 +1820,14 @@ function nextColor() {
 
 function openCatEditor(cat, onSaved) {
   const color = cat ? cat.color : nextColor();
-  catEditState = { cat, color, onSaved };
+  catEditState = { cat, color, onSaved, iconName: cat ? catIcon(cat) : null };
   el.catEditTitle.textContent = cat ? 'Editar categoría' : 'Nueva categoría';
   el.catName.value = cat ? cat.name : '';
   el.catKeywords.value = cat ? (cat.keywords || []).join(', ') : '';
   el.catDelete.hidden = !cat;
   el.catError.hidden = true;
   renderColorPicker(color);
+  renderIconPicker();
   el.catEdit.hidden = false;
   el.catName.focus();
 }
@@ -1581,6 +1844,22 @@ el.catColors.addEventListener('click', (e) => {
   if (!b || !catEditState) return;
   catEditState.color = b.dataset.color;
   renderColorPicker(catEditState.color);
+  renderIconPicker();
+});
+
+el.catIcons.addEventListener('click', (e) => {
+  const b = e.target.closest('.icon-choice');
+  if (!b || !catEditState) return;
+  catEditState.iconName = b.dataset.icon;
+  catEditState.iconTouched = true;
+  renderIconPicker();
+});
+
+// Mientras escribís el nombre de una categoría nueva, sugerimos un ícono.
+el.catName.addEventListener('input', () => {
+  if (!catEditState || catEditState.cat || catEditState.iconTouched) return;
+  catEditState.iconName = catIcon({ name: el.catName.value });
+  renderIconPicker();
 });
 
 el.catCancel.addEventListener('click', closeCatEditor);
@@ -1600,12 +1879,13 @@ el.catForm.addEventListener('submit', async (e) => {
     .filter(Boolean);
 
   const { cat, color, onSaved } = catEditState;
+  const iconName = catEditState.iconName || catIcon({ name });
   let saved;
   if (cat) {
-    Object.assign(cat, { name, color, keywords });
+    Object.assign(cat, { name, color, keywords, icon: iconName });
     saved = cat;
   } else {
-    saved = { id: uid(), name, color, keywords, created: Date.now() };
+    saved = { id: uid(), name, color, keywords, icon: iconName, created: Date.now() };
     categories.push(saved);
   }
   closeCatEditor();
@@ -1619,7 +1899,7 @@ el.catForm.addEventListener('submit', async (e) => {
 el.catDelete.addEventListener('click', async () => {
   if (!catEditState || !catEditState.cat) return;
   const cat = catEditState.cat;
-  const n = countIn(cat.id);
+  const n = countIn(cat.id, true);
   const msg = n
     ? `¿Eliminar la categoría “${cat.name}”? Sus ${n === 1 ? 'nota queda' : n + ' notas quedan'} sin categoría (no se borran).`
     : `¿Eliminar la categoría “${cat.name}”?`;
@@ -1647,7 +1927,7 @@ function renderManage() {
   for (const c of sortedCategories()) {
     const b = document.createElement('button');
     b.dataset.cat = c.id;
-    b.append(dot(c.color));
+    b.append(catGlyph(c));
     const main = document.createElement('span');
     main.className = 'row-main';
     main.append(c.name);
@@ -1656,7 +1936,7 @@ function renderManage() {
     main.append(small);
     const side = document.createElement('span');
     side.className = 'row-side';
-    side.textContent = countIn(c.id);
+    side.textContent = countIn(c.id, true);
     b.append(main, side);
     frag.append(b);
   }
@@ -1698,13 +1978,31 @@ el.search.addEventListener('input', () => {
 el.search.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') el.search.blur();
 });
+el.searchBtn.addEventListener('click', () => {
+  if (el.searchRow.hidden) {
+    el.searchRow.hidden = false;
+    el.search.focus(); // dentro del toque: abre el teclado
+  } else if (!query.trim()) {
+    el.searchRow.hidden = true;
+    el.search.blur();
+  } else {
+    el.search.focus();
+  }
+});
+el.searchCancel.addEventListener('click', () => {
+  el.search.value = '';
+  query = '';
+  el.search.blur();
+  el.searchRow.hidden = true;
+  render();
+});
 
 /* =========================================================
    Barra superior: título chico al hacer scroll
    ========================================================= */
 function updateScrolled() {
   const y = window.scrollY;
-  el.listView.querySelector('.topbar').classList.toggle('scrolled', y > 44);
+  el.listView.querySelector('.topbar').classList.toggle('scrolled', y > 70);
   el.editorView.querySelector('.topbar').classList.toggle('scrolled', y > 4);
 }
 window.addEventListener('scroll', () => {
@@ -1805,6 +2103,7 @@ function sanitizeNote(n) {
     created: Number.isFinite(n.created) ? n.created : now,
     updated: Number.isFinite(n.updated) ? n.updated : now,
     pinned: !!n.pinned,
+    archived: !!n.archived,
     categoryId: typeof n.categoryId === 'string' && n.categoryId ? n.categoryId : null,
   };
 }
@@ -1816,6 +2115,7 @@ function sanitizeCategory(c) {
     name: c.name.trim().slice(0, 30),
     color: typeof c.color === 'string' && /^#[0-9a-f]{3,8}$/i.test(c.color) ? c.color : COLORS[0],
     keywords: Array.isArray(c.keywords) ? c.keywords.filter((k) => typeof k === 'string' && k.trim()).map((k) => k.trim()) : [],
+    icon: CAT_ICONS.includes(c.icon) ? c.icon : undefined,
     created: Number.isFinite(c.created) ? c.created : Date.now(),
   };
 }

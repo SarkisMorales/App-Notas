@@ -8,6 +8,17 @@ No hace falta pagar la cuenta de desarrollador de Apple (99 USD/año) ni pasar p
 
 ## Qué hace
 
+**Etapa 5 — Diseño nuevo**
+
+- Tema oscuro con detalles en amarillo y una onda de luz de fondo.
+- Encabezado con logo, título y subtítulo, y tres botones redondos: **buscar** 🔍, **ordenar** (última modificación,
+  fecha de creación o A–Z) y **más opciones** ⋯.
+- Categorías como chips con **ícono** y cantidad de notas. Cada categoría puede elegir su ícono (si no, se adivina por el nombre).
+- Cada nota es una tarjeta con línea de color de su categoría, etiqueta, 📌 si está fijada y un botón **⋯**
+  (fijar, cambiar categoría, archivar, compartir, eliminar).
+- Abajo: micrófono, contador de notas, botón amarillo para escribir y tres pestañas:
+  **Notas**, **Favoritas** (las fijadas) y **Archivadas** (notas guardadas aparte).
+
 **Etapa 4 — Escribir más cómodo**
 
 - El **✓ de la barra del teclado** del iPhone **guarda la nota y te lleva a la lista** (también el botón *OK*).
