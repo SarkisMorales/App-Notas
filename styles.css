@@ -1273,3 +1273,24 @@ body.editing .toast { bottom: calc(24px + var(--safe-bottom)); }
   .editor-actions .icon-btn { width: 38px; padding: 8px; }
   #photo-btn { padding: 8px; }
 }
+
+/* ===================== Título de la nota ===================== */
+.note-title-field {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 14px calc(var(--pad) + 4px + var(--safe-right)) 2px calc(var(--pad) + 4px + var(--safe-left));
+  border: 0;
+  outline: 0;
+  resize: none;
+  overflow: hidden;
+  background: transparent;
+  color: var(--text);
+  caret-color: var(--accent);
+  font-family: var(--note-font);
+  font-size: calc(var(--note-size) * 1.2);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+.note-title-field::placeholder { color: var(--muted); opacity: 0.7; }

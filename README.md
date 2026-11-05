@@ -8,6 +8,14 @@ No hace falta pagar la cuenta de desarrollador de Apple (99 USD/año) ni pasar p
 
 ## Qué hace
 
+**Etapa 7 — Título de cada nota**
+
+- Cada nota tiene un campo **Título** arriba (en negrita) y debajo el texto de la nota.
+- Al crear una nota el cursor arranca en el título; con **Intro** pasás al texto.
+- En la lista se ve el título y debajo el comienzo del texto. El buscador también busca en los títulos.
+- Las notas viejas sin título se siguen viendo igual (la primera línea hace de título) y no se modifican.
+- El título viaja en la copia de seguridad y al compartir.
+
 **Etapa 6 — Fotos en las notas**
 
 - En el editor, el botón 📷 te deja **sacar una foto** en el momento o **elegir de la galería** (varias a la vez).

@@ -154,6 +154,7 @@ const el = {
   pvShare: $('pv-share'),
   pvDelete: $('pv-delete'),
   editor: $('editor'),
+  noteTitle: $('note-title'),
   editorDate: $('editor-date'),
   sheet: $('sheet'),
   sheetInfo: $('sheet-info'),
@@ -224,7 +225,13 @@ function lines(text) {
   return text.split('\n').map((l) => l.trim()).filter(Boolean);
 }
 
+function noteTitle(note) {
+  return (note && typeof note.title === 'string' ? note.title : '').replace(/\s+/g, ' ').trim();
+}
+
 function titleOf(note) {
+  const own = noteTitle(note);
+  if (own) return own;
   const first = lines(note.text)[0];
   if (first) return first;
   const n = note.photos ? note.photos.length : 0;
@@ -232,7 +239,8 @@ function titleOf(note) {
 }
 
 function previewOf(note, q) {
-  const ls = lines(note.text).slice(1);
+  // Con título propio, el texto entero es el contenido; si no, la 1.ª línea hace de título.
+  const ls = noteTitle(note) ? lines(note.text) : lines(note.text).slice(1);
   if (q) {
     const hit = ls.find((l) => normalize(l).includes(q));
     if (hit) return hit;
@@ -395,7 +403,7 @@ function catById(id) {
 
 /** Una nota "existe" si tiene texto o al menos una foto. */
 function hasContent(note) {
-  return !!note && (!!note.text.trim() || !!(note.photos && note.photos.length));
+  return !!note && (!!note.text.trim() || !!noteTitle(note) || !!(note.photos && note.photos.length));
 }
 
 function liveNotes() {
@@ -484,7 +492,7 @@ function render() {
   const q = normalize(rawQ);
   const visible = tabNotes()
     .filter((n) => filter === 'all' || (filter === 'none' ? !catById(n.categoryId) : n.categoryId === filter))
-    .filter((n) => !q || normalize(n.text).includes(q))
+    .filter((n) => !q || normalize(noteTitle(n) + '\n' + n.text).includes(q))
     .sort((a, b) => (sortBy === 'alpha'
       ? titleOf(a).localeCompare(titleOf(b), 'es', { sensitivity: 'base' })
       : sortKey(b) - sortKey(a)));
@@ -735,7 +743,7 @@ el.list.addEventListener('click', (e) => {
    ========================================================= */
 function newNote(text, categoryId) {
   const now = Date.now();
-  return { id: uid(), text: text || '', created: now, updated: now, pinned: false, categoryId: categoryId || null, photos: [] };
+  return { id: uid(), title: '', text: text || '', created: now, updated: now, pinned: false, categoryId: categoryId || null, photos: [] };
 }
 
 async function persist(note) {
@@ -794,7 +802,7 @@ async function toggleArchive(note) {
 
 async function shareNote(note) {
   if (!hasContent(note)) { showToast('La nota está vacía'); return; }
-  const text = note.text;
+  const text = [noteTitle(note), note.text.trim()].filter(Boolean).join('\n\n');
   if (note.photos && note.photos.length && navigator.share && navigator.canShare) {
     try {
       const recs = await Promise.all(note.photos.map((id) => photoStore.get(id)));
@@ -854,6 +862,8 @@ el.noteMenu.addEventListener('click', (e) => {
    ========================================================= */
 function autoGrow() {
   const y = window.scrollY;
+  el.noteTitle.style.height = 'auto';
+  el.noteTitle.style.height = el.noteTitle.scrollHeight + 'px';
   el.editor.style.height = 'auto';
   el.editor.style.height = el.editor.scrollHeight + 'px';
   window.scrollTo(0, y);
@@ -879,6 +889,7 @@ function openEditor(note, focus) {
   current = note;
   editorOpen = true;
   el.editor.value = note.text;
+  el.noteTitle.value = note.title || '';
 
   el.listView.hidden = true;
   el.editorView.hidden = false;
@@ -897,9 +908,11 @@ function openEditor(note, focus) {
   }
 
   // En iOS el teclado solo se abre si focus() ocurre dentro del toque del usuario.
+  // Nota nueva → empezás por el título. Si ya tiene algo, seguís el texto.
   if (focus) {
-    el.editor.focus();
-    el.editor.setSelectionRange(el.editor.value.length, el.editor.value.length);
+    const field = !noteTitle(note) && !note.text ? el.noteTitle : el.editor;
+    field.focus();
+    field.setSelectionRange(field.value.length, field.value.length);
   }
 }
 
@@ -907,6 +920,7 @@ async function closeEditor() {
   if (!editorOpen) return;
   editorOpen = false;
   el.editor.blur();
+  el.noteTitle.blur();
   toggleFormatPanel(false);
   closeViewer();
   el.photoSheet.hidden = true;
@@ -962,7 +976,27 @@ el.editor.addEventListener('input', () => {
   scheduleSave();
 });
 
-el.editor.addEventListener('focus', () => { el.doneBtn.hidden = false; });
+/* ---------- Título de la nota ---------- */
+el.noteTitle.addEventListener('input', () => {
+  if (!current) return;
+  // El título es una sola línea (si pegás varias, se juntan).
+  if (/\n/.test(el.noteTitle.value)) el.noteTitle.value = el.noteTitle.value.replace(/\s*\n+\s*/g, ' ');
+  current.title = el.noteTitle.value;
+  current.updated = Date.now();
+  autoGrow();
+  updateEditorChrome();
+  scheduleSave();
+});
+// "Intro" en el título te pasa al texto de la nota.
+el.noteTitle.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || e.isComposing) return;
+  e.preventDefault();
+  el.editor.focus();
+  el.editor.setSelectionRange(0, 0);
+});
+
+const isTypingField = (n) => n === el.editor || n === el.noteTitle;
+[el.editor, el.noteTitle].forEach((f) => f.addEventListener('focus', () => { el.doneBtn.hidden = false; }));
 
 /*
  * El ✓ de la barra del teclado del iPhone no se puede detectar directamente:
@@ -974,9 +1008,9 @@ let lastTouchAt = 0;
 document.addEventListener('touchstart', () => { lastTouchAt = Date.now(); }, { capture: true, passive: true });
 document.addEventListener('mousedown', () => { lastTouchAt = Date.now(); }, true);
 
-el.editor.addEventListener('blur', () => {
+function onFieldBlur() {
   // Se esconde un instante después: si lo escondemos ya, el toque en "OK" se pierde.
-  setTimeout(() => { if (document.activeElement !== el.editor) el.doneBtn.hidden = true; }, 350);
+  setTimeout(() => { if (!isTypingField(document.activeElement)) el.doneBtn.hidden = true; }, 350);
   flushSave();
   const blurAt = Date.now();
   if (blurAt - lastTouchAt < 700) return; // el teclado se cerró porque tocaste algo
@@ -984,11 +1018,13 @@ el.editor.addEventListener('blur', () => {
     if (!editorOpen || lastTouchAt > blurAt - 700) return;
     if (document.visibilityState !== 'visible' || !document.hasFocus()) return; // la app pasó a segundo plano
     const active = document.activeElement;
-    if (active && active !== document.body && active !== el.editor) return; // pasaste a otro campo
-    if (active === el.editor) return;
+    if (isTypingField(active)) return; // pasaste del título al texto (o al revés)
+    if (active && active !== document.body) return; // pasaste a otro campo
     saveAndExit();
   }, 250);
-});
+}
+el.editor.addEventListener('blur', onFieldBlur);
+el.noteTitle.addEventListener('blur', onFieldBlur);
 
 el.doneBtn.addEventListener('click', saveAndExit);
 el.backBtn.addEventListener('click', goBack);
@@ -1184,7 +1220,7 @@ el.photoGrid.addEventListener('click', (e) => {
 
 /* ---------- Menú: Sacar foto / Elegir de la galería ---------- */
 function openPhotoSheet() {
-  el.editor.blur();
+  if (isTypingField(document.activeElement)) document.activeElement.blur();
   el.photoSheet.hidden = false;
 }
 el.photoBtn.addEventListener('click', openPhotoSheet);
@@ -1221,7 +1257,7 @@ function openViewer(note, index) {
   viewer.note = note;
   viewer.ids = [...(note.photos || [])];
   if (!viewer.ids.length) return;
-  el.editor.blur();
+  if (isTypingField(document.activeElement)) document.activeElement.blur();
   el.pvTrack.replaceChildren();
   viewer.ids.forEach((id) => {
     const slide = document.createElement('div');
@@ -1434,11 +1470,12 @@ function toggleFormatPanel(show) {
 }
 
 // Si estabas escribiendo, el teclado sigue abierto mientras ajustás.
-let editorHadFocus = false;
-el.formatBtn.addEventListener('touchstart', () => { editorHadFocus = document.activeElement === el.editor; }, { passive: true });
-el.formatPanel.addEventListener('touchstart', () => { editorHadFocus = document.activeElement === el.editor; }, { passive: true });
+let editorHadFocus = null;
+const rememberField = () => { editorHadFocus = isTypingField(document.activeElement) ? document.activeElement : null; };
+el.formatBtn.addEventListener('touchstart', rememberField, { passive: true });
+el.formatPanel.addEventListener('touchstart', rememberField, { passive: true });
 function keepTyping() {
-  if (editorHadFocus && document.activeElement !== el.editor) el.editor.focus({ preventScroll: true });
+  if (editorHadFocus && document.activeElement !== editorHadFocus) editorHadFocus.focus({ preventScroll: true });
 }
 
 el.formatBtn.addEventListener('click', () => {
@@ -1463,8 +1500,10 @@ el.formatPanel.addEventListener('click', (e) => {
 });
 
 // Tocar el texto cierra el panel.
-el.editor.addEventListener('touchstart', () => { if (!el.formatPanel.hidden) toggleFormatPanel(false); }, { passive: true });
-el.editor.addEventListener('mousedown', () => { if (!el.formatPanel.hidden) toggleFormatPanel(false); });
+[el.editor, el.noteTitle].forEach((f) => {
+  f.addEventListener('touchstart', () => { if (!el.formatPanel.hidden) toggleFormatPanel(false); }, { passive: true });
+  f.addEventListener('mousedown', () => { if (!el.formatPanel.hidden) toggleFormatPanel(false); });
+});
 
 applyFormat();
 
@@ -1473,7 +1512,7 @@ let pickerNote = null;
 function openPicker(note) {
   pickerNote = note && !(note instanceof Event) ? note : current;
   if (!pickerNote) return;
-  el.editor.blur();
+  if (isTypingField(document.activeElement)) document.activeElement.blur();
   const frag = document.createDocumentFragment();
   const row = (id, label, cat) => {
     const b = document.createElement('button');
@@ -2563,6 +2602,7 @@ function sanitizeNote(n) {
   const now = Date.now();
   return {
     id: typeof n.id === 'string' && n.id ? n.id : uid(),
+    title: typeof n.title === 'string' ? n.title.replace(/\s+/g, ' ').slice(0, 200) : '',
     text: n.text,
     created: Number.isFinite(n.created) ? n.created : now,
     updated: Number.isFinite(n.updated) ? n.updated : now,
