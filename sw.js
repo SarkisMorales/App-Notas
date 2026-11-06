@@ -1,12 +1,13 @@
 /* Service worker: guarda la app en el iPhone para que funcione sin internet.
    Cambiá CACHE_VERSION cada vez que publiques cambios importantes. */
-const CACHE_VERSION = 'notas-v11';
+const CACHE_VERSION = 'notas-v12';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
   './interprete.js',
   './app.js',
+  './recordatorio.html',
   './manifest.webmanifest',
   './icons/apple-touch-icon.png',
   './icons/icon-192.png',
@@ -32,8 +33,11 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
 
-  const isPage = req.mode === 'navigate';
-  const key = isPage ? './index.html' : req;
+  // Solo la app en sí (la raíz o index.html) se responde con index.html;
+  // otras páginas (como recordatorio.html) se guardan con su propio nombre.
+  const path = new URL(req.url).pathname;
+  const isApp = req.mode === 'navigate' && (/\/$/.test(path) || /\/index\.html$/.test(path));
+  const key = isApp ? './index.html' : req;
 
   event.respondWith(
     caches.open(CACHE_VERSION).then(async (cache) => {
@@ -49,7 +53,7 @@ self.addEventListener('fetch', (event) => {
         return cached;
       }
       const res = await network;
-      return res || (isPage ? cache.match('./index.html') : Response.error());
+      return res || (isApp ? cache.match("./index.html") : (await cache.match(req, { ignoreSearch: true })) || Response.error());
     })
   );
 });

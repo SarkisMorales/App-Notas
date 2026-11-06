@@ -101,7 +101,7 @@ let query = '';
 let saveTimer = null;
 let listScrollY = 0;
 let announceSave = false; // mostrar "Nota guardada" al salir del editor
-let tab = 'notas';        // 'notas' | 'favoritas' | 'archivadas'
+let tab = 'notas';        // 'notas' | 'favoritas' | 'archivadas' | 'papelera'
 const SORT_KEY = 'notas.orden';
 const SORTS = { updated: 'Última modificación', created: 'Fecha de creación', alpha: 'Título (A–Z)' };
 let sortBy = (() => { try { const v = localStorage.getItem(SORT_KEY); return SORTS[v] ? v : 'updated'; } catch (e) { return 'updated'; } })();
@@ -155,6 +155,23 @@ const el = {
   pvDelete: $('pv-delete'),
   editor: $('editor'),
   noteTitle: $('note-title'),
+  checkBtn: $('check-btn'),
+  checklist: $('checklist'),
+  checkItems: $('check-items'),
+  checkAdd: $('check-add'),
+  checkTotal: $('check-total'),
+  trashBar: $('trash-bar'),
+  trashEmpty: $('trash-empty'),
+  trashBtn: $('trash-btn'),
+  backupHint: $('backup-hint'),
+  backupText: $('backup-text'),
+  backupDo: $('backup-do'),
+  backupLater: $('backup-later'),
+  remindSheet: $('remind-sheet'),
+  remindNote: $('remind-note'),
+  remindAt: $('remind-at'),
+  remindGo: $('remind-go'),
+  remindSafari: $('remind-safari'),
   editorDate: $('editor-date'),
   sheet: $('sheet'),
   sheetInfo: $('sheet-info'),
@@ -330,6 +347,9 @@ const ICONS = {
   doc: '<path d="M6.5 3h7.5l4.5 4.5v12A1.5 1.5 0 0 1 17 21H6.5A1.5 1.5 0 0 1 5 19.5v-15A1.5 1.5 0 0 1 6.5 3z"/><path d="M13.5 3v5h5M8.5 12.5h7M8.5 16h7"/>',
   pin: '<path d="M9 3h6l-1 6 4 4v2h-5v6l-1 1-1-1v-6H6v-2l4-4z"/>',
   camera: '<path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h3l1.6-2.5h5.8L16.5 7h3A1.5 1.5 0 0 1 21 8.5v10a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/><circle cx="12" cy="13.2" r="3.6"/>',
+  checklist: '<rect x="3" y="4" width="6.5" height="6.5" rx="1.6"/><path d="m4.7 7.3 1.2 1.2 2-2.2M13 7.2h8M13 16.8h8"/><rect x="3" y="13.5" width="6.5" height="6.5" rx="1.6"/>',
+  trash: '<path d="M4 6h16M9 6V4h6v2M6 6l1 14a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-14"/>',
+  bell: '<path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2.2 2.2 0 0 0 4 0"/>',
   grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.8"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.8"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.8"/>',
   // Íconos de categorías
   tag: '<path d="M3 12V4h8l9 9-8 8z"/><circle cx="7.5" cy="8.5" r="1.4"/>',
@@ -388,6 +408,7 @@ function hexToRgba(hex, a) {
 }
 
 const ICON_PIN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l-1 6 4 4v2h-5v6l-1 1-1-1v-6H6v-2l4-4z" fill="currentColor"/></svg>';
+const ICON_RESTORE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const ICON_TRASH = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M9 6V4h6v2M6 6l1 14a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
 /* =========================================================
@@ -407,7 +428,77 @@ function hasContent(note) {
 }
 
 function liveNotes() {
-  return notes.filter(hasContent);
+  return notes.filter((n) => hasContent(n) && !n.deleted);
+}
+
+/* ---------- Papelera: las notas borradas quedan 30 días ---------- */
+const TRASH_DAYS = 30;
+const DAY = 86400000;
+
+function trashNotes() {
+  return notes.filter((n) => n.deleted && hasContent(n));
+}
+
+function trashDaysLeft(note) {
+  return Math.max(0, Math.ceil((note.deleted + TRASH_DAYS * DAY - Date.now()) / DAY));
+}
+
+/* ---------- Listas con casillas ---------- */
+/** Ítems de una nota en casillas: cada renglón es una casilla. */
+function checklistItems(note) {
+  const done = new Set(note.done || []);
+  return note.text.split('\n').map((t) => t.trim()).filter(Boolean).map((t) => ({ text: t, done: done.has(t) }));
+}
+
+function checklistStats(note) {
+  const items = checklistItems(note);
+  return { total: items.length, done: items.filter((i) => i.done).length, items };
+}
+
+/** "12.000", "12,000", "1.500,50", "12.5" → número. */
+function parseNumber(raw) {
+  const str = raw.replace(/[.,]+$/, '');
+  if (!/\d/.test(str)) return null;
+  if (/^\d{1,3}([.,]\d{3})+$/.test(str)) return Number(str.replace(/[.,]/g, ''));
+  const m = str.match(/^(.*?)[.,](\d{1,2})$/);
+  if (m) return Number(m[1].replace(/[.,]/g, '') + '.' + m[2]);
+  return Number(str.replace(/[.,]/g, ''));
+}
+
+/** Precio de un renglón: "$12.000", "$ 12 mil", "12000 pesos", "3 mil pesos". */
+function priceOf(line) {
+  let m = line.match(/\$\s*(\d[\d.,]*)(\s*mil\b)?/i);
+  if (!m) m = line.match(/(\d[\d.,]*)(\s*mil)?\s*(?:pesos\b|\$)/i);
+  if (!m) return null;
+  const n = parseNumber(m[1]);
+  if (n == null || !Number.isFinite(n)) return null;
+  return m[2] ? n * 1000 : n;
+}
+
+function moneyTotals(items) {
+  let total = 0, left = 0, any = false;
+  items.forEach((i) => {
+    const p = priceOf(i.text);
+    if (p == null) return;
+    any = true;
+    total += p;
+    if (!i.done) left += p;
+  });
+  return any ? { total, left } : null;
+}
+
+function fmtMoney(n) {
+  return '$' + n.toLocaleString('es-AR', { maximumFractionDigits: 2 });
+}
+
+/** Texto para compartir / recordar: con casillas si es una lista. */
+function noteBody(note) {
+  if (!note.checklist) return note.text.trim();
+  const items = checklistItems(note);
+  let out = items.map((i) => (i.done ? '✅ ' : '⬜ ') + i.text).join('\n');
+  const m = moneyTotals(items);
+  if (m) out += `\n\nTotal: ${fmtMoney(m.total)}` + (m.left !== m.total ? ` · Falta: ${fmtMoney(m.left)}` : '');
+  return out;
 }
 
 function inTab(n) {
@@ -417,7 +508,7 @@ function inTab(n) {
 }
 
 function tabNotes() {
-  return liveNotes().filter(inTab);
+  return tab === 'papelera' ? trashNotes() : liveNotes().filter(inTab);
 }
 
 function countIn(catId, all) {
@@ -478,6 +569,7 @@ const TAB_TEXT = {
   notas: { title: 'Notas', sub: 'Organizá tus ideas, proyectos y tareas', one: 'nota', many: 'notas', none: 'Sin notas' },
   favoritas: { title: 'Favoritas', sub: 'Tus notas fijadas, siempre a mano', one: 'favorita', many: 'favoritas', none: 'Sin favoritas' },
   archivadas: { title: 'Archivadas', sub: 'Notas que guardaste aparte', one: 'archivada', many: 'archivadas', none: 'Sin archivadas' },
+  papelera: { title: 'Papelera', sub: 'Las notas borradas quedan acá 30 días', one: 'nota borrada', many: 'notas borradas', none: 'Papelera vacía' },
 };
 
 function sortKey(n) {
@@ -533,6 +625,8 @@ function render() {
   el.count.textContent = total === 0 ? t.none : total === 1 ? `1 ${t.one}` : `${total} ${t.many}`;
   el.listTitle.textContent = t.title;
   el.listSubtitle.textContent = t.sub;
+  el.trashBar.hidden = tab !== 'papelera' || total === 0;
+  updateBackupHint();
   el.tabbar.querySelectorAll('.tab').forEach((b) => {
     b.classList.toggle('active', b.dataset.tab === tab);
     b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false');
@@ -545,6 +639,7 @@ function render() {
     el.empty.hidden = false;
     if (q) el.empty.textContent = `No hay resultados para “${rawQ}”.`;
     else if (tab === 'favoritas') el.empty.textContent = cat ? `No hay favoritas en “${cat.name}”.` : 'Todavía no tenés favoritas.\nTocá ⋯ en una nota y elegí “Fijar en Favoritas”.';
+    else if (tab === 'papelera') el.empty.textContent = 'La papelera está vacía.\nLas notas que borres quedan acá 30 días por si te arrepentís.';
     else if (tab === 'archivadas') el.empty.textContent = cat ? `No hay notas archivadas en “${cat.name}”.` : 'No hay notas archivadas.\nTocá ⋯ en una nota y elegí “Archivar” para guardarla aparte.';
     else if (cat) el.empty.textContent = `Todavía no hay notas en “${cat.name}”.\nTocá el lápiz para escribir una, o el micrófono para dictarla.`;
     else if (filter === 'none') el.empty.textContent = 'No hay notas sin categoría.';
@@ -564,9 +659,11 @@ function noteRow(note, rawQ, q) {
 
   const actions = document.createElement('div');
   actions.className = 'note-actions';
-  actions.innerHTML =
-    `<button class="act-pin" aria-label="${note.pinned ? 'Desfijar' : 'Fijar'}">${ICON_PIN}${note.pinned ? 'Desfijar' : 'Fijar'}</button>` +
-    `<button class="act-delete" aria-label="Eliminar">${ICON_TRASH}Eliminar</button>`;
+  actions.innerHTML = note.deleted
+    ? `<button class="act-pin act-restore" aria-label="Recuperar">${ICON_RESTORE}Recuperar</button>` +
+      `<button class="act-delete" aria-label="Borrar para siempre">${ICON_TRASH}Borrar</button>`
+    : `<button class="act-pin" aria-label="${note.pinned ? 'Desfijar' : 'Fijar'}">${ICON_PIN}${note.pinned ? 'Desfijar' : 'Fijar'}</button>` +
+      `<button class="act-delete" aria-label="Eliminar">${ICON_TRASH}Eliminar</button>`;
 
   const row = document.createElement('div');
   row.className = 'note-row';
@@ -593,7 +690,7 @@ function noteRow(note, rawQ, q) {
       ico.append(n);
     }
   } else {
-    ico.innerHTML = icon('doc');
+    ico.innerHTML = icon(note.checklist ? 'checklist' : 'doc');
   }
   const main = document.createElement('span');
   main.className = 'note-main';
@@ -605,10 +702,30 @@ function noteRow(note, rawQ, q) {
   const date = document.createElement('span');
   date.className = 'note-date';
   date.textContent = shortDate(sortBy === 'created' ? note.created : note.updated);
+  if (note.deleted) {
+    const left = trashDaysLeft(note);
+    date.textContent = left <= 1 ? 'Se borra mañana' : `Se borra en ${left} días`;
+  }
   const prev = document.createElement('span');
-  appendHighlighted(prev, previewOf(note, q), rawQ);
+  let stats = null;
+  if (note.checklist) {
+    stats = checklistStats(note);
+    const hit = q && stats.items.find((i) => normalize(i.text).includes(q));
+    if (hit) appendHighlighted(prev, hit.text, rawQ);
+    else prev.textContent = stats.total ? `${stats.done} de ${stats.total} hechas` : 'Lista vacía';
+  } else {
+    appendHighlighted(prev, previewOf(note, q), rawQ);
+  }
   sub.append(date, prev);
   main.append(title, sub);
+  if (stats && stats.total) {
+    const bar = document.createElement('span');
+    bar.className = 'note-progress' + (stats.done === stats.total ? ' full' : '');
+    const fill = document.createElement('i');
+    fill.style.width = Math.round((stats.done / stats.total) * 100) + '%';
+    bar.append(fill);
+    main.append(bar);
+  }
 
   if (cat && filter === 'all') {
     const tag = document.createElement('span');
@@ -718,12 +835,12 @@ el.list.addEventListener('click', (e) => {
 
   if (e.target.closest('.act-pin')) {
     closeSwipe(li);
-    togglePin(note);
+    if (note.deleted) restoreNote(note); else togglePin(note);
     return;
   }
   if (e.target.closest('.act-delete')) {
     closeSwipe(li);
-    deleteNote(note);
+    if (note.deleted) purgeNote(note, true); else deleteNote(note);
     return;
   }
   if (e.target.closest('.note-more')) {
@@ -734,6 +851,7 @@ el.list.addEventListener('click', (e) => {
   if (e.target.closest('.note-btn')) {
     if (Date.now() - lastSwipeAt < 350) return;
     if (li.classList.contains('open')) { closeSwipe(li); return; }
+    if (note.deleted) { openNoteMenu(note); return; } // en la papelera: Recuperar / Borrar
     openEditor(note, false);
   }
 });
@@ -774,12 +892,49 @@ async function removeNote(note) {
 }
 
 async function deleteNote(note) {
-  await removeNote(note);
+  if (!hasContent(note)) { await removeNote(note); render(); return; }
+  note.deleted = Date.now();
+  await persist(note);
   render();
-  showToast('Nota eliminada', 'Deshacer', async () => {
+  showToast('Nota movida a la papelera', 'Deshacer', async () => {
+    note.deleted = 0;
     await persist(note);
     render();
   });
+}
+
+async function restoreNote(note) {
+  note.deleted = 0;
+  await persist(note);
+  render();
+  showToast(note.archived ? 'Nota recuperada (está en Archivadas)' : 'Nota recuperada');
+}
+
+/** Borra para siempre una nota de la papelera, con sus fotos. */
+async function purgeNote(note, ask) {
+  if (ask && !confirm('¿Borrar esta nota para siempre? No se puede deshacer.')) return;
+  await removeNote(note);
+  const ids = note.photos || [];
+  if (ids.length) {
+    try { await photoStore.removeMany(ids); } catch (err) { console.error(err); }
+    forgetThumbs(ids);
+  }
+  render();
+  if (ask) showToast('Nota borrada para siempre');
+}
+
+async function emptyTrash() {
+  const list = notes.filter((n) => n.deleted);
+  if (!list.length) return;
+  if (!confirm(`¿Vaciar la papelera? Se borran para siempre ${list.length === 1 ? '1 nota' : list.length + ' notas'}.`)) return;
+  for (const n of list) await purgeNote(n, false);
+  showToast('Papelera vacía');
+}
+
+/** Las notas que llevan más de 30 días en la papelera se borran solas. */
+async function purgeOldTrash() {
+  const old = notes.filter((n) => n.deleted && Date.now() - n.deleted > TRASH_DAYS * DAY);
+  for (const n of old) await purgeNote(n, false);
 }
 
 async function togglePin(note) {
@@ -802,7 +957,7 @@ async function toggleArchive(note) {
 
 async function shareNote(note) {
   if (!hasContent(note)) { showToast('La nota está vacía'); return; }
-  const text = [noteTitle(note), note.text.trim()].filter(Boolean).join('\n\n');
+  const text = [noteTitle(note), noteBody(note)].filter(Boolean).join('\n\n');
   if (note.photos && note.photos.length && navigator.share && navigator.canShare) {
     try {
       const recs = await Promise.all(note.photos.map((id) => photoStore.get(id)));
@@ -835,7 +990,8 @@ async function shareNote(note) {
 let menuNote = null;
 function openNoteMenu(note) {
   menuNote = note;
-  el.noteMenuTitle.textContent = titleOf(note);
+  el.noteMenu.classList.toggle('in-trash', !!note.deleted);
+  el.noteMenuTitle.textContent = note.deleted ? `${titleOf(note)}\nEstá en la papelera` : titleOf(note);
   el.noteMenuPin.textContent = note.pinned ? 'Quitar de Favoritas' : 'Fijar en Favoritas';
   el.noteMenuArchive.textContent = note.archived ? 'Sacar de Archivadas' : 'Archivar';
   el.noteMenu.hidden = false;
@@ -853,6 +1009,9 @@ el.noteMenu.addEventListener('click', (e) => {
     case 'archive': toggleArchive(note); break;
     case 'share': shareNote(note); break;
     case 'delete': deleteNote(note); break;
+    case 'remind': openRemind(note); break;
+    case 'restore': restoreNote(note); break;
+    case 'purge': purgeNote(note, true); break;
     default: break;
   }
 });
@@ -890,6 +1049,7 @@ function openEditor(note, focus) {
   editorOpen = true;
   el.editor.value = note.text;
   el.noteTitle.value = note.title || '';
+  applyEditorMode();
 
   el.listView.hidden = true;
   el.editorView.hidden = false;
@@ -924,6 +1084,7 @@ async function closeEditor() {
   toggleFormatPanel(false);
   closeViewer();
   el.photoSheet.hidden = true;
+  if (document.activeElement && isTypingField(document.activeElement)) document.activeElement.blur();
   const announce = announceSave;
   announceSave = false;
 
@@ -987,15 +1148,233 @@ el.noteTitle.addEventListener('input', () => {
   updateEditorChrome();
   scheduleSave();
 });
-// "Intro" en el título te pasa al texto de la nota.
+// "Intro" en el título te pasa al texto de la nota (o a la primera casilla).
 el.noteTitle.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter' || e.isComposing) return;
   e.preventDefault();
+  if (current && current.checklist) {
+    const first = el.checkItems.querySelector('.check-text');
+    if (first) focusItem(first, 0); else addCheckRow(null, '', true);
+    return;
+  }
   el.editor.focus();
   el.editor.setSelectionRange(0, 0);
 });
 
-const isTypingField = (n) => n === el.editor || n === el.noteTitle;
+const isTypingField = (n) => !!n && (n === el.editor || n === el.noteTitle || (n.classList && n.classList.contains('check-text')));
+
+/* =========================================================
+   Nota en casillas (botón ☑ de arriba): toda la nota pasa a ser
+   una lista con casillas, o vuelve a quedar escrita.
+   ========================================================= */
+function applyEditorMode() {
+  const on = !!(current && current.checklist);
+  el.editorView.classList.toggle('is-checklist', on);
+  el.editor.hidden = on;
+  el.checklist.hidden = !on;
+  el.checkBtn.setAttribute('aria-pressed', String(on));
+  el.checkBtn.setAttribute('aria-label', on ? 'Volver a nota escrita' : 'Convertir en lista con casillas');
+  if (on) renderChecklist();
+}
+
+function growItem(t) {
+  t.style.height = 'auto';
+  t.style.height = t.scrollHeight + 'px';
+}
+
+function makeCheckRow(text, done) {
+  const row = document.createElement('div');
+  row.className = 'check-row' + (done ? ' done' : '');
+  const box = document.createElement('button');
+  box.type = 'button';
+  box.className = 'check-box';
+  box.setAttribute('role', 'checkbox');
+  box.setAttribute('aria-checked', String(!!done));
+  box.setAttribute('aria-label', 'Marcar como hecho');
+  box.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6.5 12.5 3.6 3.6 7.4-8" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const t = document.createElement('textarea');
+  t.className = 'check-text';
+  t.rows = 1;
+  t.value = text;
+  t.placeholder = 'Elemento de la lista';
+  t.setAttribute('autocapitalize', 'sentences');
+  t.setAttribute('enterkeyhint', 'enter');
+  t.setAttribute('aria-label', 'Elemento de la lista');
+  row.append(box, t);
+  return row;
+}
+
+/** Dibuja la lista: lo pendiente arriba y lo hecho abajo. */
+function renderChecklist() {
+  if (!current) return;
+  const items = checklistItems(current);
+  const ordered = [...items.filter((i) => !i.done), ...items.filter((i) => i.done)];
+  el.checkItems.replaceChildren(...ordered.map((i) => makeCheckRow(i.text, i.done)));
+  requestAnimationFrame(() => el.checkItems.querySelectorAll('.check-text').forEach(growItem));
+  updateCheckTotal();
+}
+
+function checkRows() {
+  return [...el.checkItems.querySelectorAll('.check-row')];
+}
+
+/** Pasa lo que hay en pantalla a la nota y la guarda. */
+function syncChecklist() {
+  if (!current) return;
+  const rows = checkRows();
+  const texts = rows.map((r) => r.querySelector('.check-text').value.replace(/\s*\n+\s*/g, ' '));
+  current.text = texts.join('\n');
+  current.done = [...new Set(rows.map((r, i) => (r.classList.contains('done') ? texts[i].trim() : '')).filter(Boolean))];
+  current.updated = Date.now();
+  updateEditorChrome();
+  updateCheckTotal();
+  scheduleSave();
+}
+
+function updateCheckTotal() {
+  if (!current) return;
+  const m = moneyTotals(checklistItems(current));
+  el.checkTotal.hidden = !m;
+  if (m) {
+    el.checkTotal.replaceChildren();
+    const a = document.createElement('span');
+    a.innerHTML = `Total <strong></strong>`;
+    a.querySelector('strong').textContent = fmtMoney(m.total);
+    el.checkTotal.append(a);
+    if (m.left !== m.total) {
+      const b = document.createElement('span');
+      b.innerHTML = `Falta <strong></strong>`;
+      b.querySelector('strong').textContent = fmtMoney(m.left);
+      el.checkTotal.append(b);
+    }
+  }
+}
+
+function focusItem(t, pos) {
+  t.focus();
+  const at = pos == null ? t.value.length : pos;
+  try { t.setSelectionRange(at, at); } catch (e) { /* nada */ }
+}
+
+/** Agrega una casilla después de `afterRow` (o al final de lo pendiente). */
+function addCheckRow(afterRow, text, focus) {
+  const row = makeCheckRow(text || '', false);
+  if (afterRow) afterRow.after(row);
+  else {
+    const firstDone = el.checkItems.querySelector('.check-row.done');
+    el.checkItems.insertBefore(row, firstDone);
+  }
+  const t = row.querySelector('.check-text');
+  growItem(t);
+  if (focus) focusItem(t, 0);
+  return row;
+}
+
+/** Convierte el texto escrito en renglones para casillas (saca guiones y viñetas). */
+function textToItems(text) {
+  const done = [];
+  const items = lines(text).map((l) => {
+    const m = l.match(/^(?:[-–•*·▪◦]|\d+[.)]|\[( |x|X)\]|[☐☑✅⬜✔✓])\s*/);
+    let t = m ? l.slice(m[0].length).trim() : l;
+    if (m && /[xX☑✅✔✓]/.test(m[0])) done.push(t);
+    return t;
+  }).filter(Boolean);
+  return { text: items.join('\n'), done };
+}
+
+el.checkBtn.addEventListener('click', () => {
+  if (!current) return;
+  if (!current.checklist) {
+    current.text = el.editor.value;
+    const conv = textToItems(current.text);
+    current.text = conv.text;
+    current.done = [...new Set([...(current.done || []), ...conv.done])];
+    current.checklist = true;
+  } else {
+    syncChecklist();
+    current.text = lines(current.text).join('\n');
+    current.checklist = false;
+    el.editor.value = current.text;
+  }
+  current.updated = Date.now();
+  applyEditorMode();
+  updateEditorChrome();
+  autoGrow();
+  if (hasContent(current)) persist(current);
+  if (current.checklist && !checklistItems(current).length) addCheckRow(null, '', true);
+  showToast(current.checklist ? 'Nota convertida en casillas' : 'Nota escrita de nuevo');
+});
+
+el.checkAdd.addEventListener('click', () => addCheckRow(null, '', true));
+
+el.checkItems.addEventListener('click', (e) => {
+  const box = e.target.closest('.check-box');
+  if (!box || !current) return;
+  const row = box.closest('.check-row');
+  if (!row.querySelector('.check-text').value.trim()) return;
+  row.classList.toggle('done');
+  box.setAttribute('aria-checked', String(row.classList.contains('done')));
+  syncChecklist();
+  flushSave();
+  // Un instante para ver la tilde y después lo hecho baja.
+  setTimeout(() => { if (current && current.checklist) renderChecklist(); }, 260);
+});
+
+el.checkItems.addEventListener('input', (e) => {
+  const t = e.target.closest('.check-text');
+  if (!t) return;
+  if (t.value.includes('\n')) {
+    // Pegaste varios renglones: una casilla por renglón.
+    const parts = t.value.split(/\n+/);
+    t.value = parts.shift();
+    let row = t.closest('.check-row');
+    let last = t;
+    parts.forEach((part) => { row = addCheckRow(row, part.trim(), false); last = row.querySelector('.check-text'); });
+    focusItem(last);
+  }
+  growItem(t);
+  syncChecklist();
+});
+
+el.checkItems.addEventListener('keydown', (e) => {
+  const t = e.target.closest('.check-text');
+  if (!t || e.isComposing) return;
+  const row = t.closest('.check-row');
+  if (e.key === 'Enter') {
+    // Intro: nueva casilla abajo (si el cursor está en el medio, corta el renglón).
+    e.preventDefault();
+    const at = t.selectionStart;
+    const after = t.value.slice(t.selectionEnd);
+    t.value = t.value.slice(0, at);
+    growItem(t);
+    if (!t.value.trim() && !after.trim() && row.nextElementSibling === null) return; // ya hay una vacía al final
+    const insertAfter = row.classList.contains('done') ? null : row;
+    const nr = addCheckRow(insertAfter, after.trim(), false);
+    focusItem(nr.querySelector('.check-text'), 0);
+    syncChecklist();
+  } else if (e.key === 'Backspace' && t.selectionStart === 0 && t.selectionEnd === 0) {
+    // Borrar al principio: junta con la casilla de arriba (o la quita si está vacía).
+    const prev = row.previousElementSibling;
+    if (!prev && t.value) return;
+    e.preventDefault();
+    const target = prev ? prev.querySelector('.check-text') : (row.nextElementSibling && row.nextElementSibling.querySelector('.check-text'));
+    if (prev) {
+      const pos = target.value.length;
+      target.value += (t.value && target.value ? ' ' : '') + t.value;
+      row.remove();
+      growItem(target);
+      focusItem(target, pos);
+    } else {
+      row.remove();
+      if (target) focusItem(target, 0); else el.noteTitle.focus();
+    }
+    syncChecklist();
+  }
+});
+
+el.checkItems.addEventListener('focusin', (e) => { if (e.target.closest('.check-text')) el.doneBtn.hidden = false; });
+el.checkItems.addEventListener('focusout', (e) => { if (e.target.closest('.check-text')) onFieldBlur(); });
+el.checkItems.addEventListener('touchstart', () => { if (!el.formatPanel.hidden) toggleFormatPanel(false); }, { passive: true });
 [el.editor, el.noteTitle].forEach((f) => f.addEventListener('focus', () => { el.doneBtn.hidden = false; }));
 
 /*
@@ -1569,7 +1948,7 @@ el.newBtn.addEventListener('click', () => {
   const inCat = catById(filter);
   const note = newNote('', inCat ? inCat.id : null);
   if (tab === 'favoritas') note.pinned = true;
-  if (tab === 'archivadas') { tab = 'notas'; render(); }
+  if (tab === 'archivadas' || tab === 'papelera') { tab = 'notas'; render(); }
   openEditor(note, true);
 });
 
@@ -1694,7 +2073,7 @@ const HINT_MIC = 'Si el micrófono no responde, tocá el cuadro de texto y usá 
 
 function openCapture() {
   if (openRow) closeSwipe(openRow);
-  if (tab === 'archivadas') { tab = 'notas'; render(); }
+  if (tab === 'archivadas' || tab === 'papelera') { tab = 'notas'; render(); }
   el.search.blur();
   el.toast.hidden = true;
   el.captureText.value = '';
@@ -2185,6 +2564,34 @@ el.reviewMerge.addEventListener('click', () => {
   renderReview();
 });
 
+/**
+ * Si dictaste "lista de compras: pan, leche y huevos", arma una nota en casillas.
+ * Devuelve { title, items } o null si no empieza con "lista".
+ */
+function parseDictatedList(text) {
+  const m = text.match(/^\s*(?:(?:haceme|hace|hacé|armame|arma|armá|crea|creá|nueva|una|otra)\s+)*(?:una\s+)?lista\b\s*(.*)$/is);
+  if (!m) return null;
+  let rest = m[1].trim();
+  let header = '';
+  const colon = rest.indexOf(':');
+  if (colon >= 0) {
+    header = rest.slice(0, colon).trim();
+    rest = rest.slice(colon + 1);
+  } else {
+    // "lista de compras pan, leche…" → "de compras" es el nombre de la lista.
+    const h = rest.match(/^((?:de|para|del)\s+(?:(?:el|la|los|las|mi|mis)\s+)?[^\s,.;]+)[\s,.;]+/i);
+    if (h) { header = h[1]; rest = rest.slice(h[0].length); }
+  }
+  rest = rest.replace(/^[\s,.;:-]+/, '');
+  const items = rest
+    .split(/\s*[,;\n]\s*|\s*\.\s+|\s+y\s+(?=\S)|\s+e\s+(?=[ií])/i)
+    .map((x) => x.replace(/^(?:y|e)\s+/i, '').replace(/[.\s]+$/, '').trim())
+    .filter(Boolean)
+    .map((x) => capitalize(x));
+  if (!items.length) return null;
+  return { title: header ? capitalize(('lista ' + header).replace(/\s+/g, ' ')) : 'Lista', items };
+}
+
 async function saveReview() {
   if (!review) return;
   const cards = review.cards.filter((c) => c.text.trim());
@@ -2211,6 +2618,12 @@ async function saveReview() {
   const now = Date.now();
   const saved = cards.map((c, k) => {
     const n = newNote(c.text.trim(), c.categoryId);
+    const dictated = parseDictatedList(n.text);
+    if (dictated) {
+      n.title = dictated.title;
+      n.text = dictated.items.join('\n');
+      n.checklist = true;
+    }
     n.pinned = !!c.pinned;
     n.created = n.updated = now - k;
     return n;
@@ -2479,6 +2892,8 @@ function openSheet() {
   const live = liveNotes();
   const total = live.length;
   const photos = live.reduce((k, n) => k + ((n.photos && n.photos.length) || 0), 0);
+  const inTrash = trashNotes().length;
+  el.trashBtn.textContent = inTrash ? `Papelera (${inTrash})` : 'Papelera';
   el.sheetInfo.textContent =
     `Tenés ${total === 1 ? '1 nota' : total + ' notas'}` +
     (photos ? `, ${photos === 1 ? '1 foto' : photos + ' fotos'}` : '') +
@@ -2489,6 +2904,15 @@ function openSheet() {
 function closeSheet() { el.sheet.hidden = true; }
 
 el.menuBtn.addEventListener('click', openSheet);
+
+el.trashBtn.addEventListener('click', () => {
+  closeSheet();
+  tab = 'papelera';
+  filter = 'all';
+  render();
+  window.scrollTo(0, 0);
+});
+el.trashEmpty.addEventListener('click', emptyTrash);
 
 $('mic-diag-btn').addEventListener('click', () => {
   closeSheet();
@@ -2539,7 +2963,52 @@ function base64ToBlob(b64, type) {
   return new Blob([bytes], { type: type || 'image/jpeg' });
 }
 
-el.exportBtn.addEventListener('click', async () => {
+const BACKUP_LAST = 'notas.copia.ultima';
+const BACKUP_SNOOZE = 'notas.copia.posponer';
+const BACKUP_EVERY_DAYS = 14;
+
+function readNum(key) {
+  try { return Number(localStorage.getItem(key)) || 0; } catch (e) { return 0; }
+}
+function writeNum(key, v) {
+  try { localStorage.setItem(key, String(v)); } catch (e) { /* sin acceso */ }
+}
+
+function markBackup() {
+  writeNum(BACKUP_LAST, Date.now());
+  updateBackupHint();
+}
+
+/** Cartelito: "Hace 15 días que no guardás una copia de seguridad". */
+function updateBackupHint() {
+  const live = liveNotes();
+  const last = readNum(BACKUP_LAST);
+  const now = Date.now();
+  let show = tab === 'notas' && !query.trim() && now >= readNum(BACKUP_SNOOZE);
+  if (show) {
+    if (!last) show = live.length >= 3;
+    else show = live.length > 0 && now - last > BACKUP_EVERY_DAYS * DAY;
+  }
+  el.backupHint.hidden = !show;
+  if (!show) return;
+  if (!last) {
+    el.backupText.textContent = 'Todavía no guardaste una copia de seguridad. Si se pierde el iPhone o se borra la app, se pierden las notas y las fotos.';
+  } else {
+    const days = Math.floor((now - last) / DAY);
+    el.backupText.textContent = `Hace ${days} días que no guardás una copia de seguridad de tus notas.`;
+  }
+}
+
+el.backupDo.addEventListener('click', () => exportBackup());
+el.backupLater.addEventListener('click', () => {
+  writeNum(BACKUP_SNOOZE, Date.now() + 3 * DAY);
+  updateBackupHint();
+  showToast('Te lo recuerdo en unos días');
+});
+
+el.exportBtn.addEventListener('click', () => exportBackup());
+
+async function exportBackup() {
   closeSheet();
   const live = liveNotes();
   const photoIds = [...new Set(live.flatMap((n) => n.photos || []))];
@@ -2576,6 +3045,8 @@ el.exportBtn.addEventListener('click', async () => {
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title: 'Copia de seguridad de Notas' });
+      markBackup();
+      showToast('Copia de seguridad lista');
       return;
     } catch (err) {
       if (err && err.name === 'AbortError') return;
@@ -2589,7 +3060,8 @@ el.exportBtn.addEventListener('click', async () => {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
-});
+  markBackup();
+}
 
 el.importBtn.addEventListener('click', () => {
   closeSheet();
@@ -2610,6 +3082,9 @@ function sanitizeNote(n) {
     archived: !!n.archived,
     categoryId: typeof n.categoryId === 'string' && n.categoryId ? n.categoryId : null,
     photos: Array.isArray(n.photos) ? n.photos.filter((p) => typeof p === 'string' && p) : [],
+    checklist: !!n.checklist,
+    done: Array.isArray(n.done) ? n.done.filter((d) => typeof d === 'string' && d.trim()).map((d) => d.trim()) : [],
+    deleted: Number.isFinite(n.deleted) && n.deleted > 0 ? n.deleted : 0,
   };
 }
 
@@ -2693,6 +3168,148 @@ el.importFile.addEventListener('change', async () => {
 });
 
 /* =========================================================
+   Recordatorio: crea un evento con alarma para el Calendario
+   del iPhone (archivo .ics). No necesita servidor.
+   ========================================================= */
+let remindNoteRef = null;
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+function toLocalInput(d) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+function quickTime(kind) {
+  const d = new Date();
+  if (kind === '1h') { d.setMinutes(d.getMinutes() + 60, 0, 0); return d; }
+  if (kind === 'tonight') { d.setHours(20, 0, 0, 0); return d; }
+  d.setDate(d.getDate() + 1);
+  d.setHours(9, 0, 0, 0);
+  return d;
+}
+
+function openRemind(note) {
+  if (!note) return;
+  remindNoteRef = note;
+  el.remindNote.textContent = `“${titleOf(note)}”`;
+  el.remindAt.value = toLocalInput(quickTime('tomorrow'));
+  el.remindAt.min = toLocalInput(new Date());
+  const tonight = el.remindSheet.querySelector('[data-quick="tonight"]');
+  tonight.hidden = new Date().getHours() >= 20;
+  el.remindSheet.querySelectorAll('[data-quick]').forEach((b) => b.classList.toggle('active', b.dataset.quick === 'tomorrow'));
+  el.remindSheet.hidden = false;
+}
+
+function icsEscape(s) {
+  return s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+}
+function icsStamp(d) {
+  return d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+}
+/** Las líneas de un .ics no pueden pasar de 75 bytes: se cortan y siguen con un espacio. */
+function icsFold(line) {
+  const out = [];
+  let cur = '';
+  let bytes = 0;
+  for (const ch of Array.from(line)) {
+    const b = new TextEncoder().encode(ch).length;
+    if (bytes + b > 73) { out.push(cur); cur = ' '; bytes = 1; }
+    cur += ch;
+    bytes += b;
+  }
+  out.push(cur);
+  return out.join('\r\n');
+}
+
+function buildIcs(title, body, start) {
+  const end = new Date(start.getTime() + 15 * 60000);
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Notas//Recordatorio//ES',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    `UID:${uid()}@notas`,
+    `DTSTAMP:${icsStamp(new Date())}`,
+    `DTSTART:${icsStamp(start)}`,
+    `DTEND:${icsStamp(end)}`,
+    `SUMMARY:${icsEscape(title)}`,
+    `DESCRIPTION:${icsEscape(body.slice(0, 1500))}`,
+    'BEGIN:VALARM',
+    'ACTION:DISPLAY',
+    `DESCRIPTION:${icsEscape(title)}`,
+    'TRIGGER:PT0M',
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ];
+  return lines.map(icsFold).join('\r\n') + '\r\n';
+}
+
+function remindData() {
+  const note = remindNoteRef;
+  const start = new Date(el.remindAt.value);
+  if (!note || !el.remindAt.value || Number.isNaN(start.getTime())) { showToast('Elegí el día y la hora'); return null; }
+  if (start.getTime() < Date.now() - 60000) { showToast('Esa hora ya pasó'); return null; }
+  return { title: '📝 ' + titleOf(note), body: noteBody(note), start };
+}
+
+function whenText(d) {
+  const today = startOfDay(new Date());
+  const day = startOfDay(d);
+  const hm = `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+  if (day === today) return `hoy a las ${hm}`;
+  if (day === today + DAY) return `mañana a las ${hm}`;
+  return `el ${d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })} a las ${hm}`;
+}
+
+el.remindSheet.addEventListener('click', async (e) => {
+  if (e.target.closest('[data-close]')) { el.remindSheet.hidden = true; return; }
+  const q = e.target.closest('[data-quick]');
+  if (q) {
+    el.remindAt.value = toLocalInput(quickTime(q.dataset.quick));
+    el.remindSheet.querySelectorAll('[data-quick]').forEach((b) => b.classList.toggle('active', b === q));
+    return;
+  }
+  if (e.target.closest('#remind-go')) {
+    const data = remindData();
+    if (!data) return;
+    const ics = buildIcs(data.title, data.body, data.start);
+    const file = new File([ics], 'recordatorio.ics', { type: 'text/calendar' });
+    el.remindSheet.hidden = true;
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file] });
+        showToast(`Recordatorio para ${whenText(data.start)}`);
+        return;
+      } catch (err) {
+        if (err && err.name === 'AbortError') return;
+      }
+    }
+    // Sin "compartir": lo abrimos directo (Safari ofrece "Agregar al calendario").
+    const url = URL.createObjectURL(file);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'recordatorio.ics';
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    return;
+  }
+  if (e.target.closest('#remind-safari')) {
+    // Plan B: la misma página abierta en Safari, que sabe pasar el evento al Calendario.
+    const data = remindData();
+    if (!data) return;
+    const params = new URLSearchParams({ t: data.title, d: data.body.slice(0, 1200), s: String(data.start.getTime()) });
+    el.remindSheet.hidden = true;
+    window.open('recordatorio.html#' + params.toString(), '_blank');
+  }
+});
+el.remindAt.addEventListener('input', () => {
+  el.remindSheet.querySelectorAll('[data-quick]').forEach((b) => b.classList.remove('active'));
+});
+
+/* =========================================================
    Avisos (toast)
    ========================================================= */
 let toastTimer = null;
@@ -2754,6 +3371,7 @@ async function init() {
     console.error(err);
     showToast('No se pudieron cargar las notas');
   }
+  await purgeOldTrash();
   render();
   setTimeout(cleanOrphanPhotos, 1500);
 

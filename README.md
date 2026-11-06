@@ -8,6 +8,19 @@ No hace falta pagar la cuenta de desarrollador de Apple (99 USD/año) ni pasar p
 
 ## Qué hace
 
+**Etapa 8 — Casillas, papelera, copia y recordatorios**
+
+- Botón **☑** arriba en el editor: **toda la nota se convierte en casillas** (cada renglón es una).
+  Tocándolo de nuevo vuelve a quedar escrita. Lo tachado baja al final y se recuerda aunque cambies de modo.
+  - Intro agrega otra casilla, borrar en una casilla vacía la quita, pegar varios renglones crea varias.
+  - Si los renglones tienen precios (`$12.000`, `8 mil pesos`), abajo aparece el **Total** y lo que **Falta**.
+  - En la lista se ve "3 de 7 hechas" con una barrita.
+  - Dictando *"lista de compras: pan, leche y huevos"* se crea una nota en casillas con ese título.
+- **Papelera**: lo que borrás queda 30 días (⋯ → Papelera). Desde ahí se recupera o se borra para siempre.
+- **Aviso de copia de seguridad**: si nunca hiciste una o pasaron más de 14 días, aparece un cartel para hacerla en un toque.
+- **Recordarme… (Calendario)** en el ⋯ de cada nota: crea un evento con alarma para el Calendario del iPhone.
+  Si en el iPhone no aparece el Calendario, el botón "Abrir en Safari" usa `recordatorio.html`.
+
 **Etapa 7 — Título de cada nota**
 
 - Cada nota tiene un campo **Título** arriba (en negrita) y debajo el texto de la nota.

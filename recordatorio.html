@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#07080c">
+  <meta name="color-scheme" content="dark">
+  <title>Recordatorio</title>
+  <style>
+    :root { --bg: #07080c; --card: #15171d; --text: #f4f5f7; --muted: #8e919b; --accent: #ffc800; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: calc(32px + env(safe-area-inset-top)) 20px 40px;
+      background: var(--bg);
+      color: var(--text);
+      font: 17px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    }
+    h1 { font-size: 26px; margin: 0 0 6px; }
+    p { color: var(--muted); margin: 0 0 22px; }
+    .card { background: var(--card); border-radius: 18px; padding: 16px 18px; margin-bottom: 22px; }
+    .card strong { display: block; font-size: 19px; margin-bottom: 4px; }
+    .card span { color: var(--accent); font-weight: 600; }
+    a.btn {
+      display: block;
+      text-align: center;
+      padding: 16px;
+      border-radius: 16px;
+      background: var(--accent);
+      color: #111;
+      font-weight: 700;
+      font-size: 18px;
+      text-decoration: none;
+    }
+    .err { color: #ff6961; }
+  </style>
+</head>
+<body>
+  <h1>Recordatorio</h1>
+  <p>Tocá el botón y elegí <strong>Agregar al calendario</strong>. Después podés cerrar esta página y volver a Notas.</p>
+  <div class="card" id="card"></div>
+  <a class="btn" id="go" href="#">Agregar al Calendario</a>
+  <script>
+    'use strict';
+    (function () {
+      const q = new URLSearchParams(location.hash.slice(1));
+      const title = q.get('t') || 'Recordatorio';
+      const body = q.get('d') || '';
+      const start = new Date(Number(q.get('s')));
+      const card = document.getElementById('card');
+      const go = document.getElementById('go');
+      if (Number.isNaN(start.getTime())) {
+        card.innerHTML = '<span class="err">No llegó la fecha del recordatorio. Volvé a Notas y probá de nuevo.</span>';
+        go.hidden = true;
+        return;
+      }
+      const t = document.createElement('strong');
+      t.textContent = title;
+      const w = document.createElement('span');
+      w.textContent = start.toLocaleString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+      card.append(t, w);
+
+      const esc = (s) => s.replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+      const stamp = (d) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+      const fold = (line) => {
+        const out = []; let cur = ''; let bytes = 0;
+        for (const ch of Array.from(line)) {
+          const b = new TextEncoder().encode(ch).length;
+          if (bytes + b > 73) { out.push(cur); cur = ' '; bytes = 1; }
+          cur += ch; bytes += b;
+        }
+        out.push(cur);
+        return out.join('\r\n');
+      };
+      const end = new Date(start.getTime() + 15 * 60000);
+      const ics = [
+        'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Notas//Recordatorio//ES', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+        'BEGIN:VEVENT',
+        'UID:' + Date.now().toString(36) + Math.random().toString(36).slice(2) + '@notas',
+        'DTSTAMP:' + stamp(new Date()), 'DTSTART:' + stamp(start), 'DTEND:' + stamp(end),
+        'SUMMARY:' + esc(title), 'DESCRIPTION:' + esc(body),
+        'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:' + esc(title), 'TRIGGER:PT0M', 'END:VALARM',
+        'END:VEVENT', 'END:VCALENDAR',
+      ].map(fold).join('\r\n') + '\r\n';
+      go.href = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics);
+    })();
+  </script>
+</body>
+</html>

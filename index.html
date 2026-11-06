@@ -76,6 +76,19 @@
       <button class="text-btn" id="install-hint-close">Entendido</button>
     </div>
 
+    <div id="backup-hint" class="install-hint backup-hint" hidden>
+      <p><span class="hint-ico" aria-hidden="true">💾</span> <span id="backup-text"></span></p>
+      <div class="hint-actions">
+        <button class="text-btn strong-btn" id="backup-do">Hacer copia ahora</button>
+        <button class="text-btn muted-btn" id="backup-later">Más tarde</button>
+      </div>
+    </div>
+
+    <div id="trash-bar" class="install-hint trash-bar" hidden>
+      <p>Las notas borradas quedan acá <strong>30 días</strong> y después se borran solas. Deslizá una nota o tocala para recuperarla.</p>
+      <button class="text-btn danger-btn" id="trash-empty">Vaciar papelera</button>
+    </div>
+
     <main id="notes-list" aria-live="polite"></main>
     <p id="empty" class="empty" hidden></p>
 
@@ -101,11 +114,12 @@
     <header class="topbar editor-bar">
       <button class="back-btn accent" id="back-btn">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4 7 12l8 8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        Notas
+        <span class="back-label">Notas</span>
       </button>
       <div class="editor-actions">
         <button class="icon-btn accent aa-btn" id="format-btn" aria-label="Ajustes de letra" aria-expanded="false">Aa</button>
         <button class="icon-btn accent" id="photo-btn" aria-label="Agregar foto" data-icon="camera"></button>
+        <button class="icon-btn accent" id="check-btn" aria-label="Convertir en lista con casillas" aria-pressed="false" data-icon="checklist"></button>
         <button class="icon-btn accent" id="pin-btn" aria-label="Fijar nota" aria-pressed="false">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path class="pin-shape" d="M9 3h6l-1 6 4 4v2h-5v6l-1 1-1-1v-6H6v-2l4-4z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
         </button>
@@ -162,6 +176,11 @@
       <button id="cat-btn" class="cat-chip" aria-label="Cambiar categoría"></button>
     </div>
     <textarea id="note-title" class="note-title-field" rows="1" placeholder="Título" spellcheck="true" autocapitalize="sentences" enterkeyhint="next" maxlength="200" aria-label="Título de la nota"></textarea>
+    <div id="checklist" class="checklist" hidden>
+      <div id="check-items" class="check-items"></div>
+      <button type="button" id="check-add" class="check-add"><span aria-hidden="true">+</span> Agregar elemento</button>
+      <p id="check-total" class="check-total" hidden></p>
+    </div>
     <textarea id="editor" placeholder="Escribí tu nota…" spellcheck="true" autocapitalize="sentences" aria-label="Texto de la nota"></textarea>
     <div id="photo-grid" class="photo-grid" hidden></div>
   </section>
@@ -212,6 +231,7 @@
       <div class="sheet-group">
         <p class="sheet-info" id="sheet-info"></p>
         <button id="manage-btn">Administrar categorías</button>
+        <button id="trash-btn">Papelera</button>
         <button id="export-btn">Exportar copia de seguridad</button>
         <button id="import-btn">Importar copia de seguridad</button>
         <button id="mic-diag-btn">Diagnóstico del micrófono</button>
@@ -232,8 +252,32 @@
         <button data-act="pin" id="note-menu-pin"></button>
         <button data-act="move">Cambiar categoría</button>
         <button data-act="archive" id="note-menu-archive"></button>
+        <button data-act="remind">Recordarme… (Calendario)</button>
         <button data-act="share">Compartir</button>
         <button data-act="delete" class="danger">Eliminar</button>
+        <button data-act="restore" class="trash-only">Recuperar nota</button>
+        <button data-act="purge" class="danger trash-only">Borrar para siempre</button>
+      </div>
+      <div class="sheet-group">
+        <button class="strong" data-close>Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ RECORDATORIO ============ -->
+  <div id="remind-sheet" class="sheet" hidden>
+    <div class="sheet-backdrop" data-close></div>
+    <div class="sheet-panel" role="dialog" aria-modal="true" aria-label="Recordatorio">
+      <div class="sheet-group remind-group">
+        <p class="sheet-info">Recordarme <span id="remind-note"></span><br>Se agrega al Calendario del iPhone con una alarma.</p>
+        <div class="remind-quick">
+          <button type="button" data-quick="1h">En 1 hora</button>
+          <button type="button" data-quick="tonight">Hoy 20:00</button>
+          <button type="button" data-quick="tomorrow">Mañana 9:00</button>
+        </div>
+        <label class="remind-field"><span>Día y hora</span><input type="datetime-local" id="remind-at"></label>
+        <button id="remind-go" class="strong">Agregar al Calendario</button>
+        <button id="remind-safari" class="remind-alt">¿No aparece el Calendario? Abrir en Safari</button>
       </div>
       <div class="sheet-group">
         <button class="strong" data-close>Cancelar</button>

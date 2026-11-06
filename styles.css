@@ -1294,3 +1294,171 @@ body.editing .toast { bottom: calc(24px + var(--safe-bottom)); }
   letter-spacing: -0.01em;
 }
 .note-title-field::placeholder { color: var(--muted); opacity: 0.7; }
+
+/* ===================== Barra del editor (7 botones) ===================== */
+.editor-actions .icon-btn { width: 40px; padding: 9px; }
+#check-btn[aria-pressed="true"], #photo-btn:active { background: rgba(255, 200, 0, 0.16); }
+@media (max-width: 380px) {
+  .editor-actions .icon-btn { width: 36px; padding: 7px; }
+  .aa-btn { font-size: 17px; }
+}
+@media (max-width: 340px) {
+  .back-label { display: none; }
+}
+
+/* ===================== Nota en casillas ===================== */
+.checklist {
+  padding: 8px calc(var(--pad) + var(--safe-right)) 0 calc(var(--pad) + var(--safe-left));
+}
+#editor-view.is-checklist:not(.has-photos) .checklist { padding-bottom: calc(40vh + var(--safe-bottom)); }
+.check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 2px 0;
+}
+.check-box {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: calc((var(--note-size) * var(--note-line) - 44px) / 2 + 4px);
+}
+.check-box svg {
+  width: 28px;
+  height: 28px;
+  padding: 3px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  color: transparent;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.check-row.done .check-box svg { background: var(--accent); border-color: var(--accent); color: #111; }
+.check-text {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 4px 4px 4px 0;
+  border: 0;
+  outline: 0;
+  resize: none;
+  overflow: hidden;
+  background: transparent;
+  color: var(--text);
+  caret-color: var(--accent);
+  font-family: var(--note-font);
+  font-size: var(--note-size);
+  font-weight: var(--note-weight);
+  line-height: var(--note-line);
+}
+.check-text::placeholder { color: var(--muted); opacity: 0.6; }
+.check-row.done .check-text { color: var(--muted); text-decoration: line-through; text-decoration-thickness: 2px; }
+.check-row.done + .check-row:not(.done) { margin-top: 0; }
+.check-row:not(.done) + .check-row.done { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.check-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 4px 12px 4px 10px;
+  color: var(--accent);
+  font-size: 18px;
+  font-weight: 600;
+}
+.check-add span { font-size: 28px; font-weight: 400; line-height: 1; width: 28px; text-align: center; }
+.check-add:active { opacity: 0.5; }
+.check-total {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 10px 4px 0;
+  padding: 12px 16px;
+  border-radius: 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  font-size: 18px;
+  color: var(--muted);
+}
+.check-total strong { color: var(--text); font-size: 20px; margin-left: 6px; }
+.check-total span + span strong { color: var(--accent); }
+
+/* Barrita de avance en la tarjeta */
+.note-progress {
+  display: block;
+  width: min(160px, 100%);
+  height: 5px;
+  margin-top: 7px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.note-progress i { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
+.note-progress.full i { background: var(--green, #34c759); }
+
+/* ===================== Avisos: copia y papelera ===================== */
+.backup-hint, .trash-bar { position: relative; z-index: 1; }
+.hint-ico { font-size: 17px; }
+.hint-actions { display: flex; gap: 14px; }
+.backup-hint .strong-btn { color: var(--accent); font-weight: 700; padding-left: 0; }
+.backup-hint .muted-btn { color: var(--muted); }
+.trash-bar { color: var(--muted); }
+.trash-bar strong { color: var(--text); }
+.trash-bar .danger-btn { color: var(--danger); font-weight: 600; padding-left: 0; }
+.note-actions .act-restore { background: #30b0c7; }
+
+/* Menú de una nota: en la papelera solo Recuperar / Borrar */
+#note-menu .trash-only { display: none; }
+#note-menu.in-trash .trash-only { display: block; }
+#note-menu.in-trash [data-act]:not(.trash-only) { display: none; }
+#note-menu.in-trash .sheet-group > .trash-only:first-of-type { border-top: 0; }
+#note-menu-title { white-space: pre-line; }
+
+/* ===================== Recordatorio ===================== */
+.remind-quick {
+  display: flex;
+  gap: 8px;
+  padding: 0 14px 12px;
+}
+.remind-quick button {
+  flex: 1;
+  min-height: 44px;
+  padding: 0 6px;
+  border-radius: 12px;
+  background: var(--fill);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.remind-quick button.active { background: var(--accent); color: #111; }
+.remind-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 16px;
+  border-top: 0.5px solid var(--sep);
+  font-size: 17px;
+  color: var(--text);
+}
+.remind-field input {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--fill);
+  color: var(--text);
+  font: inherit;
+  color-scheme: dark;
+}
+.sheet-group > button.remind-alt { min-height: 46px; font-size: 15px; color: var(--muted); }
+
+/* El aviso de abajo usa todo el ancho que necesita (antes se partía palabra por palabra) */
+.toast { width: max-content; }
+.toast > span { min-width: 0; }
+
+/* Buscador: que "Cancelar" no se salga de la pantalla */
+.search { min-width: 0; }
+.search-row > .text-btn { flex: none; }
